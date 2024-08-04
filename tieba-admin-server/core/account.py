@@ -3,7 +3,7 @@ from sanic import Blueprint, Request
 from sanic_jwt import inject_user, protected, scoped
 
 from core.exception import ArgException, FirstLoginError
-from core.models import Permission, User, Config, ForumUserPermission
+from core.models import Permission, User, ForumUserPermission
 from core.utils import json, validate_password
 
 bp_account = Blueprint("account", url_prefix="/api/auth")
@@ -28,8 +28,7 @@ async def first_login_api(rqt: Request):
 
     用于第一次登录时填入初始化设置信息
     """
-    is_first = await Config.get_bool(key="first")
-    if not is_first:
+    if not rqt.app.ctx.schema_manager.schema["first_start"].value:
         raise FirstLoginError("不是首次登录")
     if not (rqt.form.get('BDUSS') and rqt.form.get('fname')
             and rqt.form.get('password') and rqt.form.get('STOKEN')):
@@ -56,7 +55,8 @@ async def first_login_api(rqt: Request):
         user=user,
         permission=Permission.Master.value,
     )
-    await Config.set_config(key="first", v1=False)
+    with rqt.app.ctx.schema_manager as manager:
+        manager.schema["first_start"] = False
     return json("成功创建超级管理员")
 
 

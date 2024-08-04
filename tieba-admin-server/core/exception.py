@@ -18,3 +18,6 @@ class ArgException(TiebaAdminException):
 class FirstLoginError(TiebaAdminException):
     status_code = 403
     message = "第一次登录错误"
+
+    def __init__(self, is_first):
+        self.is_first = is_first

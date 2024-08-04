@@ -1,5 +1,4 @@
 import json
-import os
 from datetime import datetime
 from enum import IntEnum, unique, Enum
 from typing import Any, Optional
@@ -9,11 +8,6 @@ from argon2.exceptions import VerifyMismatchError
 from sanic_jwt.exceptions import AuthenticationFailed
 from tortoise import Model, fields
 from tortoise.exceptions import DoesNotExist
-
-from . import env
-
-if not os.path.exists(env.CACHE_PATH):
-    os.makedirs(env.CACHE_PATH)
 
 
 @unique
