@@ -16,7 +16,7 @@ if not os.path.exists(LOG_PATH):
     os.makedirs(LOG_PATH)
 
 LOG_FILE_PATH = f"{LOG_PATH}/{LOGFILE}"
-LOGGING_CONFIG = LOGGING_CONFIG_DEFAULTS
+LOGGING_CONFIG = LOGGING_CONFIG_DEFAULTS.copy()
 LOGGING_CONFIG.update({
     "handlers": {
         "console": {
