@@ -86,7 +86,7 @@ async def init_server(_app: Sanic):
 
 @app.on_request
 async def first_login_check(rqt: Request):
-    is_first = rqt.app.ctx.schema_manager.schema["first_start"]
+    is_first = rqt.app.ctx.schema_manager.schema["first_start"].value
     if is_first and rqt.path != '/api/auth/first_login' and rqt.path.startswith("/api"):
         raise FirstLoginError(is_first)
 

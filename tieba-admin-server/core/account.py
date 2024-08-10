@@ -29,7 +29,7 @@ async def first_login_api(rqt: Request):
     用于第一次登录时填入初始化设置信息
     """
     if not rqt.app.ctx.schema_manager.schema["first_start"].value:
-        raise FirstLoginError("不是首次登录")
+        raise FirstLoginError(rqt.app.ctx.schema_manager.schema["first_start"].value)
     if not (rqt.form.get('BDUSS') and rqt.form.get('fname')
             and rqt.form.get('password') and rqt.form.get('STOKEN')):
         raise ArgException

@@ -25,7 +25,7 @@ def init_jwt(app: Sanic):
             raise AuthenticationFailed("请先登录账号")
         try:
             user = await User.get_via_uid(int(uid))
-            await user.verify_password(rqt.app.shared_ctx.password_hasher, password)
+            await user.verify_password(rqt.app.ctx.password_hasher, password)
             return user
         except ValueError:
             raise AuthenticationFailed("请使用uid登录")
