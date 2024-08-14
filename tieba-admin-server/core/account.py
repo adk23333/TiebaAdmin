@@ -28,8 +28,8 @@ async def first_login_api(rqt: Request):
 
     用于第一次登录时填入初始化设置信息
     """
-    if not rqt.app.ctx.schema_manager.schema["first_start"].value:
-        raise FirstLoginError(rqt.app.ctx.schema_manager.schema["first_start"].value)
+    if not rqt.app.ctx.config["first_start"]:
+        raise FirstLoginError(rqt.app.ctx.config["first_start"])
     if not (rqt.form.get('BDUSS') and rqt.form.get('fname')
             and rqt.form.get('password') and rqt.form.get('STOKEN')):
         raise ArgException
@@ -45,7 +45,7 @@ async def first_login_api(rqt: Request):
         uid=user.user_id,
         tuid=user.tieba_uid,
         username=user.user_name,
-        password=rqt.app.shared_ctx.password_hasher.hash(rqt.form.get('password')),
+        password=rqt.app.ctx.password_hasher.hash(rqt.form.get('password')),
         BDUSS=rqt.form.get('BDUSS'),
         STOKEN=rqt.form.get('STOKEN'),
     )
@@ -55,8 +55,8 @@ async def first_login_api(rqt: Request):
         user=user,
         permission=Permission.Master.value,
     )
-    with rqt.app.ctx.schema_manager as manager:
-        manager.schema["first_start"] = False
+    with rqt.app.ctx.config:
+        rqt.app.ctx.config["first_start"] = False
     return json("成功创建超级管理员")
 
 
@@ -73,7 +73,7 @@ async def change_password(rqt: Request, user: User):
         raise ArgException
 
     validate_password(rqt.form.get("password"))
-    user.password = rqt.app.shared_ctx.password_hasher.hash(rqt.form.get('password'))
+    user.password = rqt.app.ctx.password_hasher.hash(rqt.form.get('password'))
     await user.save()
     return json("修改密码成功")
 

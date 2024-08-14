@@ -1,6 +1,11 @@
 import asyncio
+from abc import ABCMeta, abstractmethod
+from typing import MutableMapping, Type
 
+from sanic import Sanic
 from sanic.log import logger
+
+from core.schema import SchemaManager
 
 
 class BasePlugin(object):
@@ -50,3 +55,70 @@ class BasePlugin(object):
             pass
         except KeyboardInterrupt:
             pass
+
+
+class Plugin(metaclass=ABCMeta):
+    name: str = None
+    package_name: str = None
+    config_path: str = f"plugins/{package_name}/config.toml"
+    config: SchemaManager = None
+
+    def __init__(self, app: Sanic):
+        self._app = app
+
+        if self.name is None:
+            self.name = self.package_name
+
+        if isinstance(self.config, SchemaManager):
+            if not self.config.load():
+                self.config.dump()
+
+    def __init_subclass__(cls, **kwargs):
+        if cls.package_name is None:
+            raise NotImplementedError(f"请给 {cls} 定义插件的包名")
+        PluginManager.plugins[cls.package_name] = cls
+
+    @abstractmethod
+    async def running(self):
+        raise NotImplementedError
+
+    async def after_running(self):
+        ...
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.after_running()
+        self._app.shared_ctx.plugins.remove(f"p-{self.package_name}")
+        if exc_val is not None:
+            logger.error(f"plugin: <{self.package_name}> ", exc_val)
+
+    @classmethod
+    async def task(cls, app: Sanic):
+        async with cls(app) as plugin:
+            logger.info(f"plugin: <{plugin.package_name}> running.")
+            await plugin.running()
+            logger.info(f"plugin: <{plugin.package_name}> stopped.")
+
+
+class PluginManager:
+    plugins: MutableMapping[str, Type[Plugin]] = {}
+
+    def __init__(self, app: Sanic):
+        self._app = app
+
+    async def start_plugin(self, package: str):
+        if package not in self.plugins.keys():
+            raise KeyError
+        pname = f"p-{package}"
+        if pname not in self._app.shared_ctx.plugins:
+            self._app.shared_ctx.plugins.append(pname)
+            _ = self._app.add_task(
+                self.plugins[package].task(self._app),
+                name=pname
+            )
+
+    async def stop_plugin(self, package: str, msg: str = None):
+        pname = f"p-{package}"
+        await self._app.cancel_task(pname, msg)

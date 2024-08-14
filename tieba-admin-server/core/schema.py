@@ -1,9 +1,12 @@
 ﻿import abc
 import os.path
-from typing import Any, Dict, List, Optional
+import tomllib
+from typing import Any, Dict, List, TypeVar, Generic
 
-import yaml
+import tomli_w
 from sanic.log import logger
+
+ListItemType = TypeVar("ListItemType")
 
 
 class BaseItem(abc.ABC):
@@ -40,20 +43,9 @@ class BaseItem(abc.ABC):
         self._value = _v
         return self
 
-    def _json(self):
-        return {
-            "required": self._required,
-            "default": self._default,
-            "description": self._description,
-            "editable": self._editable,
-        }
-
     @property
-    @abc.abstractmethod
     def json(self):
-        value = self._json()
-        value["value"] = str(self._value)
-        return value
+        return self._value
 
     def __repr__(self):
         return repr(self._value)
@@ -64,8 +56,14 @@ class BaseItem(abc.ABC):
 
 
 class DictItem(BaseItem):
+    _value: Dict[str, BaseItem]
+    _default: Dict[str, BaseItem]
+
     def __getitem__(self, item):
-        return self._value[item]
+        if isinstance(self._value[item], DictItem) or isinstance(self._value[item], ListItem):
+            return self._value[item]
+        else:
+            return self._value[item].value
 
     def __setitem__(self, key, value):
         self._value[key].set(value)
@@ -78,23 +76,23 @@ class DictItem(BaseItem):
 
     def default(self, _value: Dict[str, BaseItem]):
         self._default = _value
-        self._value = self._default
+        self.set_value(self._default)
         return self
 
     @property
     def json(self):
-        _value = {k: v.json for k, v in self.items()}
-        value = self._json()
-        value["value"] = _value
-        return value
+        return {k: v.json for k, v in self.items()}
 
 
-class ListItem(BaseItem):
-    def __getitem__(self, item):
+class ListItem(Generic[ListItemType], BaseItem):
+    _value: List[ListItemType]
+    _default: List[ListItemType]
+
+    def __getitem__(self, item: int):
         return self._value[item]
 
-    def __setitem__(self, key, value):
-        self._value[key].set(value)
+    def __setitem__(self, key: int, value):
+        self._value[key] = value
 
     def __len__(self):
         return len(self._value)
@@ -104,13 +102,14 @@ class ListItem(BaseItem):
         self._value = self._default
         return self
 
-    @property
-    def json(self):
-        _value = [i.json for i in self._value]
+    def append(self, value: Any):
+        self._value.append(value)
 
-        value = self._json()
-        value["value"] = _value
-        return value
+    def pop(self, index: int):
+        self._value.pop(index)
+
+    def remove(self, value: Any):
+        self._value.remove(value)
 
 
 class StringItem(BaseItem):
@@ -135,17 +134,6 @@ class StringItem(BaseItem):
         self._textarea = True
         return self
 
-    @property
-    def json(self):
-        value = self._json()
-        value.update({
-            "secret": self._secret,
-            "link": self._link,
-            "textarea": self._textarea,
-            "value": self._value,
-        })
-        return value
-
 
 class IntItem(BaseItem):
     _min: int = None
@@ -169,17 +157,6 @@ class IntItem(BaseItem):
         self._step = _v
         return self
 
-    @property
-    def json(self):
-        value = self._json()
-        value.update({
-            "min": self._min,
-            "max": self._max,
-            "step": self._step,
-            "value": self._value,
-        })
-        return value
-
 
 class BoolItem(BaseItem):
     _value: bool = None
@@ -190,21 +167,10 @@ class BoolItem(BaseItem):
         self._value = self._default
         return self
 
-    @property
-    def json(self):
-        value = self._json()
-        value["value"] = self._value
-        return value
 
-
-class SchemaManager:
+class SchemaManager(DictItem):
     def __init__(self, path: str):
         self.path = path
-        self._schema: Optional[DictItem] = None
-
-        if not os.path.exists(self.path):
-            with open(self.path, "w", encoding="utf-8"):
-                pass
 
     @classmethod
     def dict(cls, _v: Dict[str, BaseItem]):
@@ -227,67 +193,41 @@ class SchemaManager:
         return BoolItem()
 
     def dumps(self):
-        return yaml.dump(self._schema.json, allow_unicode=True)
+        return tomli_w.dumps(self.json)
 
     def dump(self):
-        if self._schema is not None:
-            with open(self.path, "w", encoding="utf-8") as fp:
-                yaml.dump(self._schema.json, fp, allow_unicode=True)
+        if self.value is not None:
+            with open(self.path, "wb") as fp:
+                tomli_w.dump(self.json, fp)
 
-    @classmethod
-    def _to_schema(cls, data: Dict):
-        match data["value"]:
-            case list():
-                result = ListItem()
-                for k, v in data.items():
-                    if k == "value":
-                        result.__setattr__(f"_{k}", [cls._to_schema(i) for i in v])
-                    else:
-                        result.__setattr__(f"_{k}", v)
-                return result
+    @staticmethod
+    def _to_config(obj: DictItem, data: Dict[str, Any]):
+        for k, v in obj.items():
+            if isinstance(v, DictItem):
+                SchemaManager._to_config(v, data[k])
+            else:
+                obj._value[k].set_value(data[k])
+        return obj
 
-            case dict():
-                result = DictItem()
-                for k, v in data.items():
-                    if k == "value":
-                        result.__setattr__(f"_{k}", {k2: cls._to_schema(v2) for k2, v2 in v.items()})
-                    else:
-                        result.__setattr__(f"_{k}", v)
-                return result
-
-            case str():
-                result = StringItem()
-                for k, v in data.items():
-                    result.__setattr__(f"_{k}", v)
-                return result
-
-            case bool():
-                result = BoolItem()
-                for k, v in data.items():
-                    result.__setattr__(f"_{k}", v)
-                return result
-
-            case int():
-                result = IntItem()
-                for k, v in data.items():
-                    result.__setattr__(f"_{k}", v)
-                return result
-
-    def load(self, schema: DictItem = None):
-        if schema is None:
-            with open(self.path, "r", encoding="utf-8") as fp:
-                data: Dict = yaml.load(fp, yaml.FullLoader)
-            if data is not None:
-                self._schema = self._to_schema(data)
+    def load(self):
+        if os.path.exists(self.path):
+            with open(self.path, "rb") as fp:
+                data = tomllib.load(fp)
+            SchemaManager._to_config(self, data)
+            return True
         else:
-            self._schema = schema
+            return False
 
-    @property
-    def schema(self):
-        return self._schema
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.dump()
+        if exc_tb is not None:
+            raise exc_val
 
 
-default_schema = SchemaManager.dict({
+server_config = SchemaManager("./config.toml").default({
     "cache_path": SchemaManager.string().default("./.cache").description("缓存文件目录"),
     "cache_file": SchemaManager.string().default("db.sqlite").description("缓存文件名"),
     "first_start": SchemaManager.bool().default(True).description("第一次启动").non_editable(),
@@ -299,6 +239,6 @@ default_schema = SchemaManager.dict({
         "web": SchemaManager.bool().default(True).description("是否启动网页"),
         "secret": SchemaManager.string().default("This is a big secret!!!").description("加密密钥"),
         "db_url": SchemaManager.string().default("sqlite://./.cache/db.sqlite").description("数据库地址"),
-        "dev": SchemaManager.bool().default(False).description("开发模式"),
-    }).description("服务器启动项"),
-}).description("服务器配置文件")
+        "dev": SchemaManager.bool().default(False).description("开发模式"), }
+    ).description("服务器启动项"), }
+).description("服务器配置文件")

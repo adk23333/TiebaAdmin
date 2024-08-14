@@ -1,6 +1,6 @@
 .venv
 aiotieba.toml
-config.yml
+config.toml
 .cache
 log
 web

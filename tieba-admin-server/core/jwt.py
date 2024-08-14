@@ -44,7 +44,7 @@ def init_jwt(app: Sanic):
         url_prefix = "/api/auth"
         path_to_retrieve_user = "/self"
         expiration_delta = 60 * 60
-        secret = app.ctx.schema_manager.schema["server"]["secret"].value
+        secret = app.ctx.config["server"]["secret"]
         # cookie_set = True
         # cookie_access_token_name = "token"
         user_id = "uid"
