@@ -168,7 +168,7 @@ class BoolItem(BaseItem):
         return self
 
 
-class SchemaManager(DictItem):
+class ConfigManager(DictItem):
     def __init__(self, path: str):
         self.path = path
 
@@ -204,7 +204,7 @@ class SchemaManager(DictItem):
     def _to_config(obj: DictItem, data: Dict[str, Any]):
         for k, v in obj.items():
             if isinstance(v, DictItem):
-                SchemaManager._to_config(v, data[k])
+                ConfigManager._to_config(v, data[k])
             else:
                 obj._value[k].set_value(data[k])
         return obj
@@ -213,7 +213,7 @@ class SchemaManager(DictItem):
         if os.path.exists(self.path):
             with open(self.path, "rb") as fp:
                 data = tomllib.load(fp)
-            SchemaManager._to_config(self, data)
+            ConfigManager._to_config(self, data)
             return True
         else:
             return False
@@ -227,18 +227,18 @@ class SchemaManager(DictItem):
             raise exc_val
 
 
-server_config = SchemaManager("./config.toml").default({
-    "cache_path": SchemaManager.string().default("./.cache").description("缓存文件目录"),
-    "cache_file": SchemaManager.string().default("db.sqlite").description("缓存文件名"),
-    "first_start": SchemaManager.bool().default(True).description("第一次启动").non_editable(),
-    "version_code": SchemaManager.string().default("2.0.0").description("版本号"),
-    "server": SchemaManager.dict({
-        "host": SchemaManager.string().default("0.0.0.0").description("监听地址"),
-        "port": SchemaManager.int().default(3100).description("监听端口"),
-        "workers": SchemaManager.int().default(1).description("工作进程数"),
-        "web": SchemaManager.bool().default(True).description("是否启动网页"),
-        "secret": SchemaManager.string().default("This is a big secret!!!").description("加密密钥"),
-        "db_url": SchemaManager.string().default("sqlite://./.cache/db.sqlite").description("数据库地址"),
-        "dev": SchemaManager.bool().default(False).description("开发模式"), }
+server_config = ConfigManager("./config.toml").default({
+    "cache_path": ConfigManager.string().default("./.cache").description("缓存文件目录"),
+    "cache_file": ConfigManager.string().default("db.sqlite").description("缓存文件名"),
+    "first_start": ConfigManager.bool().default(True).description("第一次启动").non_editable(),
+    "version_code": ConfigManager.string().default("2.0.0").description("版本号"),
+    "server": ConfigManager.dict({
+        "host": ConfigManager.string().default("0.0.0.0").description("监听地址"),
+        "port": ConfigManager.int().default(3100).description("监听端口"),
+        "workers": ConfigManager.int().default(1).description("工作进程数"),
+        "web": ConfigManager.bool().default(True).description("是否启动网页"),
+        "secret": ConfigManager.string().default("This is a big secret!!!").description("加密密钥"),
+        "db_url": ConfigManager.string().default("sqlite://./.cache/db.sqlite").description("数据库地址"),
+        "dev": ConfigManager.bool().default(False).description("开发模式"), }
     ).description("服务器启动项"), }
 ).description("服务器配置文件")

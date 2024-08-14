@@ -5,7 +5,7 @@ from typing import MutableMapping, Type
 from sanic import Sanic
 from sanic.log import logger
 
-from core.schema import SchemaManager
+from core.setting import ConfigManager
 
 
 class BasePlugin(object):
@@ -61,7 +61,7 @@ class Plugin(metaclass=ABCMeta):
     name: str = None
     package_name: str = None
     config_path: str = f"plugins/{package_name}/config.toml"
-    config: SchemaManager = None
+    config: ConfigManager = None
 
     def __init__(self, app: Sanic):
         self._app = app
@@ -69,7 +69,7 @@ class Plugin(metaclass=ABCMeta):
         if self.name is None:
             self.name = self.package_name
 
-        if isinstance(self.config, SchemaManager):
+        if isinstance(self.config, ConfigManager):
             if not self.config.load():
                 self.config.dump()
 

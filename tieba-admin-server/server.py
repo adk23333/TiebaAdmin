@@ -19,12 +19,12 @@ from core.log import bp_log
 from core.manager import bp_manager
 from core.models import Permission
 from core.plugin import PluginManager
-from core.schema import SchemaManager, server_config
+from core.setting import ConfigManager, server_config
 from core.utils import json, sqlite_database_exits
 
 
 class Context:
-    config: SchemaManager
+    config: ConfigManager
     plugin_manager: PluginManager
 
 
