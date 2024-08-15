@@ -3,7 +3,6 @@ import os
 import random
 import re
 import string
-from typing import Union
 
 import aiotieba
 from sanic import Request
@@ -80,7 +79,7 @@ def get_num_between_two_signs(s: str, sign: str) -> int:
 
 async def arg2user_info(client: aiotieba.Client, arg: str,
                         require: aiotieba.enums.ReqUInfo = aiotieba.enums.ReqUInfo.BASIC
-                        ) -> Union[aiotieba.typing.UserInfo_pf, aiotieba.typing.UserInfo]:
+                        ) -> aiotieba.typing.UserInfo:
     if tieba_uid := get_num_between_two_signs(arg, '#'):
         user = await client.tieba_uid2user_info(tieba_uid)
     elif user_id := get_num_between_two_signs(arg, '/'):
