@@ -5,8 +5,9 @@ from sanic import Blueprint, Request
 from sanic.log import LOGGING_CONFIG_DEFAULTS
 from sanic_jwt import protected, scoped
 
+from core.enum import Permission
 from core.exception import ArgException
-from core.models import Permission, ExecuteLog
+from core.models import ExecuteLog
 from core.utils import json
 
 LOG_PATH = "./log"

@@ -3,8 +3,9 @@ from sanic import Blueprint, Request
 from sanic.views import HTTPMethodView
 from sanic_jwt import protected, scoped, inject_user
 
+from .enum import Permission, ExecuteType
 from .exception import ArgException
-from .models import ForumUserPermission, Permission, User, ExecuteLog, ExecuteType
+from .models import ForumUserPermission, User, ExecuteLog
 from .utils import json, arg2user_info, validate_password
 
 bp_manager = Blueprint("manager", url_prefix="/api/manager")

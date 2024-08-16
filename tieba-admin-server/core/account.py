@@ -2,8 +2,9 @@
 from sanic import Blueprint, Request
 from sanic_jwt import inject_user, protected, scoped
 
+from core.enum import Permission
 from core.exception import ArgException, FirstLoginError
-from core.models import Permission, User, ForumUserPermission
+from core.models import User, ForumUserPermission
 from core.utils import json, validate_password
 
 bp_account = Blueprint("account", url_prefix="/api/auth")

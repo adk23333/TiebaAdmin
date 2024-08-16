@@ -1,68 +1,50 @@
 import json
+import os
 from datetime import datetime
-from enum import IntEnum, unique, Enum
 from typing import Any, Optional
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
+from sanic.logging.loggers import logger
 from sanic_jwt.exceptions import AuthenticationFailed
-from tortoise import Model, fields
+from tortoise import Model, fields, Tortoise, log
 from tortoise.exceptions import DoesNotExist
 
+from core.enum import Permission, ExecuteType
+from core.types import TBApp
+from core.utils import sqlite_database_exits
 
-@unique
-class Permission(Enum):
-    """
-    权限枚举
-    
-    Attributes:
-        Master : 管理员，大吧主
-        SuperAdmin : 大吧主权限
-        HighAdmin : 高权限吧务权限
-        MinAdmin : 小吧主权限
-        Creator : 优秀创作者权限
-        Ordinary : 普通成员权限
-        Black : 黑名单权限
-    """
-    Master = "master"
-    SuperAdmin = "super"
-    HighAdmin = "high"
-    MinAdmin = "min"
-    Creator = "creator"
-    Ordinary = "ordinary"
-    Black = "black"
 
-    @classmethod
-    def all(cls):
-        return [cls.Black.value, cls.Ordinary.value, cls.Creator.value, cls.MinAdmin.value,
-                cls.HighAdmin.value, cls.SuperAdmin.value, cls.Master.value]
+async def init_database(app: TBApp):
+    log.logger = logger
 
-    @classmethod
-    def ordinary(cls):
-        return [cls.Ordinary.value, cls.Creator.value, cls.MinAdmin.value,
-                cls.HighAdmin.value, cls.SuperAdmin.value, cls.Master.value]
+    if not os.path.exists(app.ctx.config["cache_path"]):
+        os.makedirs(app.ctx.config["cache_path"])
 
-    @classmethod
-    def creator(cls):
-        return [cls.Creator.value, cls.MinAdmin.value, cls.HighAdmin.value,
-                cls.SuperAdmin.value, cls.Master.value]
+    if app.ctx.config["server"]["db_url"].startswith("sqlite"):
+        sqlite_database_exits(app.ctx.config["server"]["db_url"])
 
-    @classmethod
-    def min(cls):
-        return [cls.MinAdmin.value, cls.HighAdmin.value, cls.SuperAdmin.value,
-                cls.Master.value]
+    models = ['core.models']
+    for plugin in app.ctx.plugin_manager.plugins.values():
+        models.append(plugin.models)
 
-    @classmethod
-    def high(cls):
-        return [cls.HighAdmin.value, cls.SuperAdmin.value, cls.Master.value]
+    app.ctx.db_config = {
+        'connections': {
+            'default': app.ctx.config["server"]["db_url"]
+        },
+        'apps': {
+            'models': {
+                "models": models,
+                'default_connection': 'default',
+            }
+        },
+        "use_tz": False,
+        "timezone": "Asia/Shanghai",
+    }
 
-    @classmethod
-    def super(cls):
-        return [cls.SuperAdmin.value, cls.Master.value]
-
-    @classmethod
-    def master(cls):
-        return [cls.Master.value, ]
+    await Tortoise.init(config=app.ctx.db_config)
+    logger.info("Tortoise-ORM started.")
+    await Tortoise.generate_schemas()
 
 
 class Config(Model):
@@ -212,43 +194,3 @@ class ExecuteLog(Model):
         }
 
 
-@unique
-class ExecuteType(IntEnum):
-    """
-    操作类型
-    
-    Attributes:
-        Empty: 无操作
-        PermissionEdit: 修改本站用户权限
-    
-        TiebaPermissionEdit: 修改贴吧用户权限
-
-        ThreadDelete: 删除主题贴
-        ThreadHide: 屏蔽主题贴
-        
-        PostDelete: 删除楼层
-
-        CommentDelete: 删除楼中楼
-        
-        Block: 封禁用户
-        Black: 将用户加入黑名单
-
-        Good: 加精
-        
-    """
-    Empty = 0
-    PermissionEdit = 1
-
-    TiebaPermissionEdit = 100
-
-    ThreadHide = 110
-    ThreadDelete = 111
-
-    PostDelete = 120
-
-    CommentDelete = 130
-
-    Block = 140
-    Black = 141
-
-    Good = 150
