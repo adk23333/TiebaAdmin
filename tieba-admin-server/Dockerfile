@@ -8,4 +8,4 @@ COPY . .
 
 RUN pip install -r requirements.txt
 
-CMD ["sh", "start.sh"]
+CMD ["python", "server.py"]
