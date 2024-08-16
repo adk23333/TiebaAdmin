@@ -4,7 +4,7 @@ from multiprocessing import Manager
 
 import aiotieba
 from argon2 import PasswordHasher
-from sanic import Sanic, Request, FileNotFound, SanicException
+from sanic import FileNotFound, SanicException
 from sanic.log import logger
 from sanic.response import file
 from sanic.views import HTTPMethodView
@@ -19,16 +19,11 @@ from core.log import bp_log
 from core.manager import bp_manager
 from core.models import Permission
 from core.plugin import PluginManager
-from core.setting import ConfigManager, server_config
+from core.setting import server_config
+from core.types import TBApp, TBRequest
 from core.utils import json, sqlite_database_exits
 
-
-class Context:
-    config: ConfigManager
-    plugin_manager: PluginManager
-
-
-app = Sanic("tieba-admin-server", ctx=Context)
+app = TBApp("tieba-admin-server")
 Extend(app)
 
 app.ctx.config = server_config
@@ -71,19 +66,19 @@ app.blueprint(bp_account)
 
 
 @app.main_process_ready
-async def ready(_app: Sanic):
+async def ready(_app: TBApp):
     _app.shared_ctx.plugins = Manager().list()
 
 
 @app.before_server_start
-async def init_server(_app: Sanic):
+async def init_server(_app: TBApp):
     _app.ctx.password_hasher = PasswordHasher()
 
     _app.ctx.plugin_manager = PluginManager(_app)
 
 
 @app.on_request
-async def first_login_check(rqt: Request):
+async def first_login_check(rqt: TBRequest):
     is_first = rqt.app.ctx.config["first_start"]
     if is_first and rqt.path != '/api/auth/first_login' and rqt.path.startswith("/api"):
         raise FirstLoginError(is_first)
@@ -92,7 +87,7 @@ async def first_login_check(rqt: Request):
 @app.get("/api/plugins")
 @protected()
 @scoped(Permission.min(), False)
-async def get_plugins(rqt: Request):
+async def get_plugins(rqt: TBRequest):
     """获取所有插件的名字
 
     """
@@ -108,7 +103,7 @@ async def get_plugins(rqt: Request):
 class PluginsStatus(HTTPMethodView):
     @protected()
     @scoped(Permission.min(), False)
-    async def get(self, rqt: Request):
+    async def get(self, rqt: TBRequest):
         """获取插件状态
 
         """
@@ -123,7 +118,7 @@ class PluginsStatus(HTTPMethodView):
 
     @protected()
     @scoped(Permission.high(), False)
-    async def post(self, rqt: Request):
+    async def post(self, rqt: TBRequest):
         """设置插件状态
 
         """
@@ -157,7 +152,7 @@ app.add_route(PluginsStatus.as_view(), "/api/plugins/status")
 
 
 @app.exception(FileNotFound, ArgException, FirstLoginError)
-async def exception_handle(rqt: Request, e: SanicException):
+async def exception_handle(rqt: TBRequest, e: SanicException):
     if isinstance(e, FileNotFound):
         return await file("./web/index.html", status=404)
     elif isinstance(e, ArgException):
