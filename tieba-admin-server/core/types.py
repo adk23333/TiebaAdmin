@@ -1,5 +1,5 @@
 ﻿from types import SimpleNamespace
-from typing import Type, Dict
+from typing import Type, Dict, List
 
 from argon2 import PasswordHasher
 from sanic import Sanic, Config, Request
@@ -13,6 +13,7 @@ class Context:
     plugin_manager: PluginManager
     password_hasher: PasswordHasher
     db_config: Dict
+    tb_client: List
 
 
 TBApp: Type[Sanic[Config, Context]] = Sanic[Config, Context]

@@ -11,7 +11,7 @@ bp_plugin = Blueprint("plugin", url_prefix="/api/plugin")
 
 @bp_plugin.get("")
 @protected()
-@scoped(Permission.min(), False)
+@scoped(Permission.GE_MIN_ADMIN, False)
 async def get_plugins(rqt: TBRequest):
     """获取所有插件的名字
 
@@ -27,7 +27,7 @@ async def get_plugins(rqt: TBRequest):
 
 class PluginsStatus(HTTPMethodView):
     @protected()
-    @scoped(Permission.min(), False)
+    @scoped(Permission.GE_MIN_ADMIN, False)
     async def get(self, rqt: TBRequest):
         """获取插件状态
 
@@ -42,7 +42,7 @@ class PluginsStatus(HTTPMethodView):
             return json(data={"name": _plugin, "status": False})
 
     @protected()
-    @scoped(Permission.high(), False)
+    @scoped(Permission.GE_HIGH_ADMIN, False)
     async def post(self, rqt: TBRequest):
         """设置插件状态
 

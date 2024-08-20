@@ -8,7 +8,8 @@ from aiotieba.typing import Thread as Tb_Thread
 from aiotieba.typing import UserInfo
 from sanic.log import logger
 
-from core.models import ExecuteLog, ExecuteType
+from core.enum import ExecuteType
+from core.models import ExecuteLog
 
 BOT_PRE = "ReviewBot"
 

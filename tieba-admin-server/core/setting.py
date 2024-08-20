@@ -231,7 +231,7 @@ server_config = ConfigManager("./config.toml").default({
     "cache_path": ConfigManager.string().default("./.cache").description("缓存文件目录"),
     "cache_file": ConfigManager.string().default("db.sqlite").description("缓存文件名"),
     "first_start": ConfigManager.bool().default(True).description("第一次启动").non_editable(),
-    "version_code": ConfigManager.string().default("2.0.0").description("版本号"),
+    "version": ConfigManager.string().default("2.0.0").description("版本号"),
     "server": ConfigManager.dict({
         "host": ConfigManager.string().default("0.0.0.0").description("监听地址"),
         "port": ConfigManager.int().default(3100).description("监听端口"),

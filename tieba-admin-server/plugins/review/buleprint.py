@@ -4,7 +4,8 @@ from sanic import Blueprint, Request
 from sanic.views import HTTPMethodView
 from sanic_jwt import protected, scoped
 
-from core.models import Config, Permission
+from core.enum import Permission
+from core.models import Config
 from core.utils import json
 from .models import Keyword, Forum, Function
 

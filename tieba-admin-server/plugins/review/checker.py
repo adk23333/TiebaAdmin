@@ -5,7 +5,8 @@ from typing import Union, Callable, Coroutine, Dict, Any, Literal, List
 from aiotieba import Client
 from aiotieba.typing import Thread, Post, Comment
 
-from core.models import ForumUserPermission, Permission
+from core.enum import Permission
+from core.models import ForumUserPermission
 from . import execute
 from .execute import empty, delete, block
 from .models import Keyword

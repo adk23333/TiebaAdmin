@@ -4,7 +4,7 @@ from sanic import Request, Sanic
 from sanic_jwt import Configuration, Responses, exceptions, Initialize
 from sanic_jwt.exceptions import AuthenticationFailed
 
-from .models import User, ForumUserPermission
+from .models import User
 from .utils import json
 
 
@@ -67,8 +67,7 @@ def init_jwt(app: Sanic):
             return json(msg, None, exception.status_code)
 
     async def scope_extender(user: User, *args, **kwargs):
-        p = await ForumUserPermission.get(user=user)
-        return p.permission
+        return user.permission
 
     Initialize(app, authenticate=authenticate,
                retrieve_user=retrieve_user,

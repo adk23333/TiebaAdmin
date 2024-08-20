@@ -1,7 +1,5 @@
-import json
 import os
 from datetime import datetime
-from typing import Any, Optional
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -10,7 +8,7 @@ from sanic_jwt.exceptions import AuthenticationFailed
 from tortoise import Model, fields, Tortoise, log
 from tortoise.exceptions import DoesNotExist
 
-from core.enum import Permission, ExecuteType
+from core.enum import Permission
 from core.types import TBApp
 from core.utils import sqlite_database_exits
 
@@ -47,68 +45,48 @@ async def init_database(app: TBApp):
     await Tortoise.generate_schemas()
 
 
-class Config(Model):
-    """
-    存储简单的配置的表
-    """
-    key = fields.CharField(max_length=32)
-    v1 = fields.CharField(max_length=256)
-
-    class Meta:
-        table = "configs"
-
-    @staticmethod
-    async def get_bool(key: str) -> Optional[bool]:
-        rst = await Config.filter(key=key).get_or_none()
-        if rst:
-            return rst.v1 == str(True)
-        else:
-            return None
-
-    @staticmethod
-    async def get_list(key: str) -> Optional[bool]:
-        rst = await Config.filter(key=key).get_or_none()
-        if rst:
-            return json.loads(rst.v1)
-
-    @staticmethod
-    async def set_config(key: str, v1: Any):
-        rst = await Config.filter(key=key).get_or_none()
-        if not rst:
-            rst = Config(key=key, v1=str(v1))
-        rst.v1 = str(v1)
-        await rst.save()
-
-
-class User(Model):
-    """
-    存储账号信息
-    Attributes:
-        uid : 贴吧用户id
-        tuid : 贴吧用户的uid
-        username : 贴吧用户username
-        password : 登录本站的密码
-        BDUSS :
-        STOKEN : 
-        master : 归属该账户管辖
-    """
-    uid = fields.BigIntField(pk=True)
-    tuid = fields.BigIntField(null=True, default=None)
-    username = fields.CharField(max_length=64)
-    password = fields.CharField(max_length=128, null=True, default=None)
-    BDUSS = fields.CharField(max_length=200, null=True, default='')
-    STOKEN = fields.CharField(max_length=80, null=True, default='')
-    master = fields.BigIntField(null=True, default=None)
+class BaseModel(Model):
     date_created: datetime = fields.DatetimeField(auto_now_add=True)
     date_updated: datetime = fields.DatetimeField(auto_now=True)
 
     class Meta:
-        table = "users"
+        abstract = True
 
-    @staticmethod
-    async def get_via_uid(tuid: int):
+    def to_json(self):
+        return {k: v for k, v in self.__dict__.values() if not k.startswith("_")}
+
+
+class User(BaseModel):
+    """
+    存储账号信息
+    Attributes:
+        user_id : 贴吧用户id
+        UID : 贴吧用户的uid
+        username : 贴吧用户username
+        password : 登录本站的密码
+        BDUSS :
+        STOKEN :
+        permission:
+    """
+    user_id = fields.CharField(pk=True, max_length=64)
+    UID = fields.CharField(max_length=64, null=True, default=None)
+    username = fields.CharField(max_length=64)
+
+    enable_login = fields.BooleanField(default=False)
+    password = fields.CharField(max_length=128, null=True, default=None)
+
+    BDUSS = fields.CharField(max_length=200, null=True, default='')
+    STOKEN = fields.CharField(max_length=80, null=True, default='')
+
+    permissions: fields.ReverseRelation["ForumPermission"]
+
+    class Meta:
+        table = "user"
+
+    @classmethod
+    async def get_via_uid(cls, tuid: int):
         try:
-            user = await User.filter(tuid=tuid).get()
+            user = await cls.filter(tuid=tuid).get()
             return user
         except DoesNotExist:
             raise AuthenticationFailed("用户名或密码不正确")
@@ -122,75 +100,44 @@ class User(Model):
         except VerifyMismatchError:
             raise AuthenticationFailed("用户名或密码不正确")
 
-    def to_dict(self):
-        return {
-            "uid": self.uid,
-            "tuid": self.tuid,
-            "username": self.username,
-        }
+    def to_json(self):
+        data = super().to_json()
+        data.pop("BDUSS")
+        data.pop("STOKEN")
+        data.pop("password")
+        return data
 
 
-class ForumUserPermission(Model):
-    """
-    记录需要管理的贴吧以及其对应管理账户及权限的表
+class ForumPermission(BaseModel):
+    user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
+        "models.User", related_name="permissions", to_field="user_id"
+    )
+    forum = fields.CharField(max_length=64)
+    permission = fields.IntField(default=Permission.ORDINARY.value)
 
-    Attributes:
-        fid: 贴吧id
-        fname: 贴吧名字
-        user: 管理该吧的账号
-        permission: 权限
-    """
-    fid = fields.IntField()
-    fname = fields.CharField(max_length=128)
-    user = fields.ForeignKeyField("models.User")
-    permission = fields.CharField(max_length=128, default=Permission.Ordinary.value)
-    date_created: datetime = fields.DatetimeField(auto_now_add=True)
-    date_updated: datetime = fields.DatetimeField(auto_now=True)
+    is_executor = fields.BooleanField(default=False)
+    tb_permission = fields.IntField(default=Permission.ORDINARY.value)
 
     class Meta:
-        table = "forum_user_permission"
-
-    async def to_dict(self):
-        t = {
-            "fid": self.fid,
-            "fname": self.fname,
-            "permission": self.permission,
-        }
-        t.update((await self.user.get()).to_dict())
-        return t
+        unique_together = ("user", "forum")
 
 
-class ExecuteLog(Model):
+class ExecuteLog(BaseModel):
     """
     记录所有有必要公开的操作记录
 
     Attributes:
-        user : 执行操作的主体
-        type : 操作类型
-        note : 备注
-        date_created: 执行时间
-        date_updated: 最后修改时间
+        user: 执行操作的主体
+        type: 操作类型
+        obj: 被操作对象
+        note: 备注
     """
-    id = fields.BigIntField(pk=True)
+    log_id = fields.BigIntField(pk=True)
+    plugin = fields.CharField(max_length=64, default="TA")
     user = fields.CharField(64)
     type = fields.IntField()
     obj = fields.CharField(64)
     note = fields.TextField(default="")
-    date_created: datetime = fields.DatetimeField(auto_now_add=True)
-    date_updated: datetime = fields.DatetimeField(auto_now=True)
 
     class Meta:
         table = "execute_log"
-
-    async def to_dict(self):
-        return {
-            "id": self.id,
-            "user": self.user,
-            "type": ExecuteType(self.type).name,
-            "obj": self.obj,
-            "note": self.note,
-            "date_created": str(self.date_created.strftime("%Y-%m-%d %H:%M:%S")),
-            "date_updated": str(self.date_updated.strftime("%Y-%m-%d %H:%M:%S")),
-        }
-
-

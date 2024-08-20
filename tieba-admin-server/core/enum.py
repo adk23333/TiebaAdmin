@@ -1,63 +1,37 @@
-﻿from enum import unique, Enum, IntEnum
+﻿from enum import unique, IntFlag, auto
 
 
-@unique
-class Permission(Enum):
+class Permission(IntFlag):
     """
     权限枚举
 
     Attributes:
-        Master : 管理员，大吧主
-        SuperAdmin : 大吧主权限
-        HighAdmin : 高权限吧务权限
-        MinAdmin : 小吧主权限
-        Creator : 优秀创作者权限
-        Ordinary : 普通成员权限
-        Black : 黑名单权限
+        MASTER: 管理员，大吧主
+        SUPER_ADMIN: 大吧主权限
+        HIGH_ADMIN: 高权限吧务权限
+        MIN_ADMIN: 小吧主权限
+        CREATOR: 优秀创作者权限
+        ORDINARY: 普通成员权限
+        BLACK: 黑名单权限
     """
-    Master = "master"
-    SuperAdmin = "super"
-    HighAdmin = "high"
-    MinAdmin = "min"
-    Creator = "creator"
-    Ordinary = "ordinary"
-    Black = "black"
+    MASTER = auto()
+    SUPER_ADMIN = auto()
+    HIGH_ADMIN = auto()
+    MIN_ADMIN = auto()
+    CREATOR = auto()
+    ORDINARY = auto()
+    BLACK = auto()
 
-    @classmethod
-    def all(cls):
-        return [cls.Black.value, cls.Ordinary.value, cls.Creator.value, cls.MinAdmin.value,
-                cls.HighAdmin.value, cls.SuperAdmin.value, cls.Master.value]
-
-    @classmethod
-    def ordinary(cls):
-        return [cls.Ordinary.value, cls.Creator.value, cls.MinAdmin.value,
-                cls.HighAdmin.value, cls.SuperAdmin.value, cls.Master.value]
-
-    @classmethod
-    def creator(cls):
-        return [cls.Creator.value, cls.MinAdmin.value, cls.HighAdmin.value,
-                cls.SuperAdmin.value, cls.Master.value]
-
-    @classmethod
-    def min(cls):
-        return [cls.MinAdmin.value, cls.HighAdmin.value, cls.SuperAdmin.value,
-                cls.Master.value]
-
-    @classmethod
-    def high(cls):
-        return [cls.HighAdmin.value, cls.SuperAdmin.value, cls.Master.value]
-
-    @classmethod
-    def super(cls):
-        return [cls.SuperAdmin.value, cls.Master.value]
-
-    @classmethod
-    def master(cls):
-        return [cls.Master.value, ]
+    ALL = BLACK | ORDINARY | CREATOR | MIN_ADMIN | HIGH_ADMIN | SUPER_ADMIN | MASTER
+    GE_ORDINARY = ORDINARY | CREATOR | MIN_ADMIN | HIGH_ADMIN | SUPER_ADMIN | MASTER
+    GE_CREATOR = CREATOR | MIN_ADMIN | HIGH_ADMIN | SUPER_ADMIN | MASTER
+    GE_MIN_ADMIN = MIN_ADMIN | HIGH_ADMIN | SUPER_ADMIN | MASTER
+    GE_HIGH_ADMIN = HIGH_ADMIN | SUPER_ADMIN | MASTER
+    GE_SUPER_ADMIN = SUPER_ADMIN | MASTER
 
 
 @unique
-class ExecuteType(IntEnum):
+class ExecuteType(IntFlag):
     """
     操作类型
 
@@ -80,19 +54,19 @@ class ExecuteType(IntEnum):
         Good: 加精
 
     """
-    Empty = 0
-    PermissionEdit = 1
+    Empty = auto()
+    PermissionEdit = auto()
 
-    TiebaPermissionEdit = 100
+    TiebaPermissionEdit = auto()
 
-    ThreadHide = 110
-    ThreadDelete = 111
+    ThreadHide = auto()
+    ThreadDelete = auto()
 
-    PostDelete = 120
+    PostDelete = auto()
 
-    CommentDelete = 130
+    CommentDelete = auto()
 
-    Block = 140
-    Black = 141
+    Block = auto()
+    Black = auto()
 
-    Good = 150
+    Good = auto()

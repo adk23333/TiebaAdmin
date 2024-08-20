@@ -8,8 +8,9 @@ from aiotieba.typing import Threads, Thread, Posts, Post, Comments, Comment
 from sanic.log import logger
 from tortoise import Tortoise, connections, ConfigurationError
 
-from core.models import ForumUserPermission, User, Config, Permission
-from core.plugin import BasePlugin
+from core.enum import Permission
+from core.models import ForumUserPermission, User, Config
+from core.plugin.plugin import BasePlugin
 from . import execute
 from .checker import CheckMap, manager
 from .models import Forum as RForum
