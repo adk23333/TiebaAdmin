@@ -1,21 +1,23 @@
 import base64
 from typing import Dict
 
-from sanic import Request, Sanic
+from sanic import Request
 from sanic_jwt import Configuration, Responses, exceptions, Initialize, Authentication
 from sanic_jwt.exceptions import AuthenticationFailed
 
 from .enum import Permission
 from .models import User, ForumPermission
+from .types import TBApp
 from .utils import json
 
 
-def init_jwt(app: Sanic):
+def init_jwt(app: TBApp):
     class JwtConfig(Configuration):
-        url_prefix = "/api/auth"
+        url_prefix = "/api/account"
+        path_to_authenticate = "/login"
         path_to_retrieve_user = "/self"
         expiration_delta = 60 * 60
-        secret = app.ctx.config["server"]["secret"]
+        secret = app.ctx.config.server.secret
         cookie_set = True
         cookie_strict = True
         cookie_max_age = 60 * 10

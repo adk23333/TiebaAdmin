@@ -1,5 +1,5 @@
-import os
 from datetime import datetime
+from pathlib import Path
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -16,17 +16,18 @@ from core.utils import sqlite_database_exits
 async def init_database(app: TBApp):
     log.logger = logger
 
-    if not os.path.exists(app.ctx.config["cache_path"]):
-        os.makedirs(app.ctx.config["cache_path"])
+    path = Path(app.ctx.config.cache_path)
+    if not path.exists():
+        path.mkdir()
 
-    if app.ctx.config["server"]["db_url"].startswith("sqlite"):
-        sqlite_database_exits(app.ctx.config["server"]["db_url"])
+    if app.ctx.config.server.db_url.startswith("sqlite"):
+        sqlite_database_exits(app.ctx.config.server.db_url)
 
     models = ['core.models', 'extend.review.models']
 
     app.ctx.db_config = {
         'connections': {
-            'default': app.ctx.config["server"]["db_url"]
+            'default': app.ctx.config.server.db_url
         },
         'apps': {
             'models': {

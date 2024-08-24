@@ -47,7 +47,7 @@ class Reviewer:
             async def get_execute(_check):
                 if _check['function'].__name__ not in self.functions.get(ce_thread.fname, ()):
                     return None
-                _executor = await _check['function'](ce_thread, client)
+                _executor = await _check['function'](ce_thread, client, self.app)
                 if not _executor:
                     raise TypeError("Need to return Executor object")
                 executor.exec_compare(_executor)
@@ -136,7 +136,7 @@ class Reviewer:
             async def get_execute(_check):
                 if _check['function'].__name__ not in self.functions.get(ce_post.fname, ()):
                     return None
-                _executor = await _check['function'](ce_post, client)
+                _executor = await _check['function'](ce_post, client, self.app)
                 if not _executor:
                     raise TypeError("Need to return Executor object")
                 executor.exec_compare(_executor)
@@ -195,7 +195,7 @@ class Reviewer:
             async def get_execute(_check):
                 if _check['function'].__name__ not in self.functions.get(cae_comment.fname, ()):
                     return None
-                _executor = await _check['function'](cae_comment, client)
+                _executor = await _check['function'](cae_comment, client, self.app)
                 if not _executor:
                     raise TypeError("Need to return Executor object")
                 executor.exec_compare(_executor)
@@ -224,6 +224,7 @@ class Reviewer:
             max_time: 最大间隔时间（单位：秒）
         """
         while True:
+            logger.debug("Reviewer working ...")
             user = await fp.user.get()
             async with Client(user.BDUSS, user.STOKEN) as client:
                 logger.debug(f"[Reviewer] review {fp.forum}")
@@ -256,6 +257,8 @@ class Reviewer:
             self.forums = forums
 
     async def start(self):
+        logger.info("Reviewer start")
         if self.app is not None:
             await self.get_config()
         await asyncio.gather(*[self.run_with_client(fp) for fp in self.forums])
+        logger.info("Reviewer stopped")

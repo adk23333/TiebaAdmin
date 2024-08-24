@@ -5,11 +5,11 @@ from argon2 import PasswordHasher
 from sanic import Sanic, Config, Request
 
 if TYPE_CHECKING:
-    from core.setting import ConfigManager
+    from core.setting import Config
 
 
 class Context:
-    config: "ConfigManager"
+    config: "Config"
     password_hasher: PasswordHasher
     db_config: Dict
     tb_client: List

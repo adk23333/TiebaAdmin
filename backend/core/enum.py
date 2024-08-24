@@ -1,7 +1,5 @@
 ﻿from enum import unique, IntFlag, auto
 
-SERVER_NAME = "tieba-admin-server"
-
 
 class Permission(IntFlag):
     """

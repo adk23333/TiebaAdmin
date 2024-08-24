@@ -7,33 +7,25 @@ from sanic.log import logger
 from sanic.response import file
 from sanic_ext import Extend
 
-from core.enum import SERVER_NAME
 from core.exception import ArgException, FirstLoginError
 from core.jwt import init_jwt
 from core.models import init_database
-from core.setting import server_config
+from core.setting import config, SERVER_NAME
 from core.types import TBApp, TBRequest
 from core.utils import json
-from routes.account import bp_account
-from routes.log import bp_log
-from routes.manager import bp_manager
+from routes import api_group
 
 app = TBApp(SERVER_NAME)
 Extend(app)
 
-app.ctx.config = server_config
-if not app.ctx.config.load():
-    app.ctx.config.dump()
-
-if app.ctx.config["server"]["dev"]:
+app.ctx.config = config
+if app.ctx.config.server.dev:
     logger.setLevel(logging.DEBUG)
 aiotieba.logging.set_logger(logger)
 
 init_jwt(app)
 
-app.blueprint(bp_manager)
-app.blueprint(bp_log)
-app.blueprint(bp_account)
+app.blueprint(api_group)
 
 
 @app.main_process_ready
@@ -49,8 +41,8 @@ async def init_server(_app: TBApp):
 
 @app.on_request
 async def first_login_check(rqt: TBRequest):
-    is_first = rqt.app.ctx.config["first_start"]
-    if is_first and rqt.path != '/api/auth/first_login' and rqt.path.startswith("/api"):
+    is_first = rqt.app.ctx.config.first_start
+    if is_first and rqt.path != '/api/account/login/first' and rqt.path.startswith("/api"):
         raise FirstLoginError(is_first)
 
 
@@ -67,13 +59,13 @@ async def exception_handle(rqt: TBRequest, e: SanicException):
         return json(e.message, {"is_first": is_first}, 403)
 
 
-if app.ctx.config["server"]["web"]:
+if app.ctx.config.server.web:
     app.static("/", "./web/", index="index.html")
 
 if __name__ == "__main__":
     app.run(
-        host=app.ctx.config["server"]["host"],
-        port=app.ctx.config["server"]["port"],
-        dev=app.ctx.config["server"]["dev"],
-        workers=1,
+        host=app.ctx.config.server.host,
+        port=app.ctx.config.server.port,
+        dev=app.ctx.config.server.dev,
+        workers=app.ctx.config.server.workers,
     )
