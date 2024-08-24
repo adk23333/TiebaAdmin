@@ -1,5 +1,7 @@
 ﻿from enum import unique, IntFlag, auto
 
+SERVER_NAME = "tieba-admin-server"
+
 
 class Permission(IntFlag):
     """
@@ -28,6 +30,10 @@ class Permission(IntFlag):
     GE_MIN_ADMIN = MIN_ADMIN | HIGH_ADMIN | SUPER_ADMIN | MASTER
     GE_HIGH_ADMIN = HIGH_ADMIN | SUPER_ADMIN | MASTER
     GE_SUPER_ADMIN = SUPER_ADMIN | MASTER
+
+    @property
+    def scopes(self):
+        return [i.name for i in self]
 
 
 @unique

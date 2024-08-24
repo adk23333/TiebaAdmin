@@ -1,9 +1,10 @@
-import aiotieba
 import importlib
 import os
 import random
 import re
 import string
+
+import aiotieba
 from sanic import Request
 from sanic.response import json as sanic_json, HTTPResponse
 
@@ -104,3 +105,10 @@ def sqlite_database_exits(db_url: str):
     """
     if not os.path.exists(db_url.replace("sqlite://", "")):
         open(db_url.replace("sqlite://", ""), 'w').close()
+
+
+def cut_string(s, size: int, last_str=''):
+    if len(s) > size:
+        return s[:size] + last_str
+    else:
+        return s

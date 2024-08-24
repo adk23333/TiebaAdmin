@@ -1,35 +1,17 @@
 ﻿import abc
 import os.path
-import tomli_w
 import tomllib
+from typing import Any, Dict, List, Union
+
+import tomli_w
 from sanic.log import logger
-from typing import Any, Dict, List, TypeVar, Generic
-
-ListItemType = TypeVar("ListItemType")
 
 
-class BaseItem(abc.ABC):
+class ABCItem(abc.ABC):
     _value: Any = None
     _required = False
-    _default: Any = None
     _description: str = None
     _editable = True
-
-    def required(self):
-        self._required = True
-        return self
-
-    def non_editable(self):
-        self._editable = False
-        return self
-
-    @abc.abstractmethod
-    def default(self, _value: Any):
-        logger.error("Not Implemented")
-
-    def description(self, desc: str):
-        self._description = desc
-        return self
 
     def set(self, _v: Any):
         if self._editable:
@@ -40,6 +22,18 @@ class BaseItem(abc.ABC):
 
     def set_value(self, _v: Any):
         self._value = _v
+        return self
+
+    def required(self):
+        self._required = True
+        return self
+
+    def description(self, desc: str):
+        self._description = desc
+        return self
+
+    def non_editable(self):
+        self._editable = False
         return self
 
     @property
@@ -54,12 +48,33 @@ class BaseItem(abc.ABC):
         return self._value
 
 
-class DictItem(BaseItem):
-    _value: Dict[str, BaseItem]
-    _default: Dict[str, BaseItem]
+class BaseItem(ABCItem):
+    _default: Any = None
+
+    @abc.abstractmethod
+    def default(self, _value: Any):
+        logger.error("Not Implemented")
+
+
+class ContainItem(ABCItem):
+
+    def __len__(self):
+        return len(self._value)
+
+
+Object_T = Dict[str, ABCItem]
+
+
+class ObjectItem(ContainItem):
+    _value: Object_T
+    _default: Object_T
+
+    def __init__(self, _value: Object_T):
+        self._default = _value
+        self.set_value(self._default)
 
     def __getitem__(self, item):
-        if isinstance(self._value[item], DictItem) or isinstance(self._value[item], ListItem):
+        if isinstance(self._value[item], ObjectItem) or isinstance(self._value[item], ListItem):
             return self._value[item]
         else:
             return self._value[item].value
@@ -67,47 +82,72 @@ class DictItem(BaseItem):
     def __setitem__(self, key, value):
         self._value[key].set(value)
 
-    def __len__(self):
-        return len(self._value)
-
     def items(self):
         return self._value.items()
-
-    def default(self, _value: Dict[str, BaseItem]):
-        self._default = _value
-        self.set_value(self._default)
-        return self
 
     @property
     def json(self):
         return {k: v.json for k, v in self.items()}
 
 
-class ListItem(Generic[ListItemType], BaseItem):
-    _value: List[ListItemType]
-    _default: List[ListItemType]
+Dict_T = Dict[str, Any]
+
+
+class DictItem(ContainItem):
+    _value: List[Dict_T] = []
+    _table_title: List[str] = None
+
+    def __init__(self, table_title: List[str]):
+        if len(table_title) == 0:
+            raise TypeError
+        self._table_title = table_title
 
     def __getitem__(self, item: int):
         return self._value[item]
 
-    def __setitem__(self, key: int, value):
+    def __setitem__(self, key: int, value: Dict_T):
+        self._check_keys(value)
         self._value[key] = value
 
-    def __len__(self):
-        return len(self._value)
-
-    def default(self, _value: List):
-        self._default = _value
-        self._value = self._default
+    def default(self, _value: List[Dict_T]):
+        self._value = _value
         return self
 
-    def append(self, value: Any):
+    def append(self, value: Dict_T):
+        self._check_keys(value)
         self._value.append(value)
 
     def pop(self, index: int):
         self._value.pop(index)
 
     def remove(self, value: Any):
+        self._value.remove(value)
+
+    def _check_keys(self, value: Dict[str, Any]):
+        if set(self._table_title) != set(value.keys()):
+            raise TypeError("输入的字典需要有配置里定义的键")
+
+
+class ListItem(ContainItem):
+    _value: List[Union[int, bool, str]] = []
+
+    def __getitem__(self, item: int):
+        return self._value[item]
+
+    def __setitem__(self, key: int, value: Union[int, bool, str]):
+        self._value[key] = value
+
+    def default(self, _value: List[Union[int, bool, str]]):
+        self._value = _value
+        return self
+
+    def append(self, value: Union[int, bool, str]):
+        self._value.append(value)
+
+    def pop(self, index: int):
+        self._value.pop(index)
+
+    def remove(self, value: Union[int, bool, str]):
         self._value.remove(value)
 
 
@@ -167,13 +207,18 @@ class BoolItem(BaseItem):
         return self
 
 
-class ConfigManager(DictItem):
-    def __init__(self, path: str):
+class ConfigManager(ObjectItem):
+    def __init__(self, path: str, _value: dict[str, ABCItem]):
+        super().__init__(_value)
         self.path = path
 
     @classmethod
-    def dict(cls, _v: Dict[str, BaseItem]):
-        return DictItem().set_value(_v)
+    def object(cls, _value: dict[str, ABCItem]):
+        return ObjectItem(_value)
+
+    @classmethod
+    def dict(cls, table_title: list[str]):
+        return DictItem(table_title)
 
     @classmethod
     def list(cls):
@@ -199,20 +244,11 @@ class ConfigManager(DictItem):
             with open(self.path, "wb") as fp:
                 tomli_w.dump(self.json, fp)
 
-    @staticmethod
-    def _to_config(obj: DictItem, data: Dict[str, Any]):
-        for k, v in obj.items():
-            if isinstance(v, DictItem):
-                ConfigManager._to_config(v, data[k])
-            else:
-                obj._value[k].set_value(data[k])
-        return obj
-
     def load(self):
         if os.path.exists(self.path):
             with open(self.path, "rb") as fp:
                 data = tomllib.load(fp)
-            ConfigManager._to_config(self, data)
+            self._to_config(self, data)
             return True
         else:
             return False
@@ -225,13 +261,22 @@ class ConfigManager(DictItem):
         if exc_tb is not None:
             raise exc_val
 
+    @staticmethod
+    def _to_config(obj: "ObjectItem", data: Dict[str, Any]):
+        for k, v in obj.items():
+            if isinstance(v, ObjectItem):
+                ConfigManager._to_config(v, data[k])
+            else:
+                obj._value[k].set_value(data[k])
+        return obj
 
-server_config = ConfigManager("./config.toml").default({
+
+server_config = ConfigManager("./config.toml", {
     "cache_path": ConfigManager.string().default("./.cache").description("缓存文件目录"),
     "cache_file": ConfigManager.string().default("db.sqlite").description("缓存文件名"),
     "first_start": ConfigManager.bool().default(True).description("第一次启动").non_editable(),
     "version": ConfigManager.string().default("2.0.0").description("版本号"),
-    "server": ConfigManager.dict({
+    "server": ConfigManager.object({
         "host": ConfigManager.string().default("0.0.0.0").description("监听地址"),
         "port": ConfigManager.int().default(3100).description("监听端口"),
         "workers": ConfigManager.int().default(1).description("工作进程数"),
@@ -239,5 +284,13 @@ server_config = ConfigManager("./config.toml").default({
         "secret": ConfigManager.string().default("This is a big secret!!!").description("加密密钥"),
         "db_url": ConfigManager.string().default("sqlite://./.cache/db.sqlite").description("数据库地址"),
         "dev": ConfigManager.bool().default(False).description("开发模式"), }
-    ).description("服务器启动项"), }
-).description("服务器配置文件")
+    ).description("服务器启动项"),
+    "extend": ConfigManager.object({
+        "review": ConfigManager.object({
+            "dev": ConfigManager.bool().default(False).description("只审查不执行操作"),
+            "forums": ConfigManager.dict(["forum", "user_id"]),
+            "functions": ConfigManager.dict(["forum", "function"]),
+            "keywords": ConfigManager.list(),
+        }),
+    }),
+}).description("服务器配置文件")

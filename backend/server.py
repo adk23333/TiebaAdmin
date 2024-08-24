@@ -1,25 +1,24 @@
-import aiotieba
 import logging
+
+import aiotieba
 from argon2 import PasswordHasher
-from multiprocessing import Manager
 from sanic import FileNotFound, SanicException
 from sanic.log import logger
 from sanic.response import file
 from sanic_ext import Extend
 
-from core.account import bp_account
+from core.enum import SERVER_NAME
 from core.exception import ArgException, FirstLoginError
 from core.jwt import init_jwt
-from core.log import bp_log
-from core.manager import bp_manager
 from core.models import init_database
-from core.plugin.buleprint import bp_plugin
-from core.plugin.plugin import PluginManager
 from core.setting import server_config
 from core.types import TBApp, TBRequest
 from core.utils import json
+from routes.account import bp_account
+from routes.log import bp_log
+from routes.manager import bp_manager
 
-app = TBApp("tieba-admin-server")
+app = TBApp(SERVER_NAME)
 Extend(app)
 
 app.ctx.config = server_config
@@ -35,18 +34,16 @@ init_jwt(app)
 app.blueprint(bp_manager)
 app.blueprint(bp_log)
 app.blueprint(bp_account)
-app.blueprint(bp_plugin)
 
 
 @app.main_process_ready
 async def ready(_app: TBApp):
-    _app.shared_ctx.plugins = Manager().list()
+    pass
 
 
 @app.before_server_start
 async def init_server(_app: TBApp):
     _app.ctx.password_hasher = PasswordHasher()
-    _app.ctx.plugin_manager = PluginManager(_app)
     await init_database(_app)
 
 
@@ -78,5 +75,5 @@ if __name__ == "__main__":
         host=app.ctx.config["server"]["host"],
         port=app.ctx.config["server"]["port"],
         dev=app.ctx.config["server"]["dev"],
-        workers=app.ctx.config["server"]["workers"],
+        workers=1,
     )

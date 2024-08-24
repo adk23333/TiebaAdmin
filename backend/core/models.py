@@ -1,7 +1,8 @@
 import os
+from datetime import datetime
+
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
-from datetime import datetime
 from sanic.logging.loggers import logger
 from sanic_jwt.exceptions import AuthenticationFailed
 from tortoise import Model, fields, Tortoise, log
@@ -22,8 +23,6 @@ async def init_database(app: TBApp):
         sqlite_database_exits(app.ctx.config["server"]["db_url"])
 
     models = ['core.models']
-    for plugin in app.ctx.plugin_manager.plugins.values():
-        models.append(plugin.models)
 
     app.ctx.db_config = {
         'connections': {
@@ -52,7 +51,10 @@ class BaseModel(Model):
         abstract = True
 
     def to_json(self):
-        return {k: v for k, v in self.__dict__.values() if not k.startswith("_")}
+        data = {k: v for k, v in self.__dict__.items() if not k.startswith("_")}
+        data["date_created"] = int(data["date_created"].timestamp() * 1000)
+        data["date_updated"] = int(data["date_updated"].timestamp() * 1000)
+        return data
 
 
 class User(BaseModel):
@@ -65,7 +67,7 @@ class User(BaseModel):
         password : 登录本站的密码
         BDUSS :
         STOKEN :
-        permission:
+        permissions:
     """
     user_id = fields.CharField(pk=True, max_length=64)
     UID = fields.CharField(max_length=64, null=True, default=None)
@@ -83,9 +85,9 @@ class User(BaseModel):
         table = "user"
 
     @classmethod
-    async def get_via_uid(cls, tuid: int):
+    async def get_via_uid(cls, UID: str):
         try:
-            user = await cls.filter(tuid=tuid).get()
+            user = await cls.get(UID=UID)
             return user
         except DoesNotExist:
             raise AuthenticationFailed("用户名或密码不正确")
@@ -98,6 +100,9 @@ class User(BaseModel):
                 await self.save(update_fields=["password"])
         except VerifyMismatchError:
             raise AuthenticationFailed("用户名或密码不正确")
+
+    def to_dict(self):
+        return self.to_json()
 
     def to_json(self):
         data = super().to_json()
@@ -118,6 +123,7 @@ class ForumPermission(BaseModel):
     tb_permission = fields.IntField(default=Permission.ORDINARY.value)
 
     class Meta:
+        table = "permission"
         unique_together = ("user", "forum")
 
 
@@ -126,6 +132,7 @@ class ExecuteLog(BaseModel):
     记录所有有必要公开的操作记录
 
     Attributes:
+        plugin: 所属功能模块
         user: 执行操作的主体
         type: 操作类型
         obj: 被操作对象

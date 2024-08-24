@@ -1,52 +1,25 @@
 import base64
+from typing import Dict
+
 from sanic import Request, Sanic
-from sanic_jwt import Configuration, Responses, exceptions, Initialize
+from sanic_jwt import Configuration, Responses, exceptions, Initialize, Authentication
 from sanic_jwt.exceptions import AuthenticationFailed
 
-from .models import User
+from .enum import Permission
+from .models import User, ForumPermission
 from .utils import json
 
 
 def init_jwt(app: Sanic):
-    async def authenticate(rqt: Request):
-        if rqt.headers.get("Authorization"):
-            try:
-                authorization_type, credentials = rqt.headers.get("Authorization").split()
-            except ValueError:
-                raise AuthenticationFailed("请先登录账号")
-            if authorization_type == "Basic":
-                uid, password = (
-                    base64.b64decode(credentials).decode().split(":")
-                )
-            else:
-                raise AuthenticationFailed("错误的凭证")
-        else:
-            raise AuthenticationFailed("请先登录账号")
-        try:
-            user = await User.get_via_uid(int(uid))
-            await user.verify_password(rqt.app.ctx.password_hasher, password)
-            return user
-        except ValueError:
-            raise AuthenticationFailed("请使用uid登录")
-
-    async def retrieve_user(rqt: Request, payload):
-        try:
-            uid = payload.get('uid', None)
-            user = await User.filter(uid=uid).get()
-            return user
-        except AttributeError:
-            pass
-        except Exception:
-            raise
-
     class JwtConfig(Configuration):
         url_prefix = "/api/auth"
         path_to_retrieve_user = "/self"
         expiration_delta = 60 * 60
         secret = app.ctx.config["server"]["secret"]
-        # cookie_set = True
-        # cookie_access_token_name = "token"
-        user_id = "uid"
+        cookie_set = True
+        cookie_strict = True
+        cookie_max_age = 60 * 10
+        user_id = "user_id"
 
     class JwtResponse(Responses):
         @staticmethod
@@ -65,11 +38,60 @@ def init_jwt(app: Sanic):
                     msg = "未授权，请先登录！"
             return json(msg, None, exception.status_code)
 
-    async def scope_extender(user: User, *args, **kwargs):
-        return user.permission
+    class JwtAuthentication(Authentication):
+        async def authenticate(self, *args, **kwargs):
+            rqt: Request = args[0]
+            if rqt.headers.get("Authorization"):
+                try:
+                    authorization_type, credentials = rqt.headers.get("Authorization").split()
+                except ValueError:
+                    raise AuthenticationFailed("请先登录账号")
+                if authorization_type == "Basic":
+                    uid, password = (
+                        base64.b64decode(credentials).decode().split(":")
+                    )
+                else:
+                    raise AuthenticationFailed("错误的凭证")
+            else:
+                raise AuthenticationFailed("请先登录账号")
+            try:
+                user = await User.get_via_uid(uid)
+                await user.verify_password(rqt.app.ctx.password_hasher, password)
 
-    Initialize(app, authenticate=authenticate,
-               retrieve_user=retrieve_user,
-               configuration_class=JwtConfig,
+                return user
+            except ValueError:
+                raise AuthenticationFailed("请使用UID登录")
+
+        async def retrieve_user(self, *args, **kwargs):
+            rqt: Request = args[0]
+            payload: Dict = args[1]
+            try:
+                user_id = payload.get('user_id', None)
+                user = await User.filter(user_id=user_id).get()
+                return user
+            except AttributeError:
+                pass
+            except Exception:
+                raise
+
+        async def add_scopes_to_payload(self, user: User, *args, **kwargs):
+            return []
+
+        async def extract_scopes(self, request: Request):
+            payload = await self.extract_payload(request)
+            if not payload:
+                return None
+
+            scopes_attribute = self.config.scopes_name()
+            scopes = payload.get(scopes_attribute, None)
+            if scopes is None:
+                forum = request.cookies.get("forum", "变嫁")
+                user_id = await self.extract_user_id(request)
+                fp = await ForumPermission.get_or_none(user_id=user_id, forum=forum)
+                if fp is not None:
+                    scopes = Permission(fp.permission).scopes
+            return scopes
+
+    Initialize(app, configuration_class=JwtConfig,
                responses_class=JwtResponse,
-               add_scopes_to_payload=scope_extender)
+               authentication_class=JwtAuthentication, )

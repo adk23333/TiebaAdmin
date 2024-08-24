@@ -1,15 +1,15 @@
-﻿from argon2 import PasswordHasher
-from sanic import Sanic, Config, Request
-from typing import Type, Dict, List
+﻿from types import SimpleNamespace
+from typing import Type, Dict, List, TYPE_CHECKING
 
-from core.plugin.plugin import PluginManager
-from core.setting import ConfigManager
-from types import SimpleNamespace
+from argon2 import PasswordHasher
+from sanic import Sanic, Config, Request
+
+if TYPE_CHECKING:
+    from core.setting import ConfigManager
 
 
 class Context:
-    config: ConfigManager
-    plugin_manager: PluginManager
+    config: "ConfigManager"
     password_hasher: PasswordHasher
     db_config: Dict
     tb_client: List
