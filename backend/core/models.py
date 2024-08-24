@@ -22,7 +22,7 @@ async def init_database(app: TBApp):
     if app.ctx.config["server"]["db_url"].startswith("sqlite"):
         sqlite_database_exits(app.ctx.config["server"]["db_url"])
 
-    models = ['core.models']
+    models = ['core.models', 'extend.review.models']
 
     app.ctx.db_config = {
         'connections': {
