@@ -235,24 +235,17 @@ class Reviewer:
 
     async def get_config(self):
         with self.app.ctx.config as config:
-            self.dev = config["extend"]["review"]["dev"]
+            self.dev = config.extend.review.dev
 
-            forum_list = config["extend"]["review"]["forums"]
+            forum_list = config.extend.review.forums
             forums: List[ForumPermission] = []
             for forum in forum_list:
-                fp = await ForumPermission.get_or_none(user_id=forum["user_id"], forum=forum["forum"])
+                fp = await ForumPermission.get_or_none(user_id=forum.user_id, forum=forum.name)
                 if fp is not None:
                     forums.append(fp)
+                    self.functions[forum.name] = set(forum.functions)
                 else:
-                    config["extend"]["review"]["forums"].remove(forum)  # 移除失效的吧
-
-                    for i in config["extend"]["review"]["functions"]:  # 移除失效的吧选中的方法
-                        if i["forum"] == forum:
-                            config["extend"]["review"]["functions"].remove(i)
-                        else:
-                            if not self.functions.get(forum):  # 重新组织数据结构
-                                self.functions[forum] = set()
-                            self.functions[forum].add(i["function"])
+                    config.extend.review.forums.remove(forum)  # 移除失效的吧
 
             self.forums = forums
 

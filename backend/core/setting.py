@@ -39,7 +39,7 @@ class Config(BaseModel):
             return None
 
     def dump(self):
-        with open(CONFIG_FILE_PATH, mode="wb", encoding="utf-8") as fp:
+        with open(CONFIG_FILE_PATH, mode="wb") as fp:
             tomli_w.dump(self.dict(), fp)
 
     def __enter__(self):

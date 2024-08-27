@@ -2,6 +2,7 @@ import logging
 
 import aiotieba
 from argon2 import PasswordHasher
+from pydantic import ValidationError
 from sanic import FileNotFound, SanicException
 from sanic.log import logger
 from sanic.response import file
@@ -46,7 +47,7 @@ async def first_login_check(rqt: TBRequest):
         raise FirstLoginError(is_first)
 
 
-@app.exception(FileNotFound, ArgException, FirstLoginError)
+@app.exception(FileNotFound, ArgException, FirstLoginError, ValidationError)
 async def exception_handle(rqt: TBRequest, e: SanicException):
     if isinstance(e, FileNotFound):
         return await file("./web/index.html", status=404)
@@ -57,6 +58,8 @@ async def exception_handle(rqt: TBRequest, e: SanicException):
         if is_first is None:
             is_first = True
         return json(e.message, {"is_first": is_first}, 403)
+    elif isinstance(e, ValidationError):
+        return json("参数错误")
 
 
 if app.ctx.config.server.web:
