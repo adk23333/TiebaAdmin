@@ -1,6 +1,7 @@
 ﻿from types import SimpleNamespace
-from typing import Type, Dict, List, TYPE_CHECKING
+from typing import Type, Dict, TYPE_CHECKING
 
+from aiotieba import Client
 from argon2 import PasswordHasher
 from sanic import Sanic, Config, Request
 
@@ -12,7 +13,7 @@ class Context:
     config: "Config"
     password_hasher: PasswordHasher
     db_config: Dict
-    tb_client: List
+    tb_client: Dict[str, Client]
 
 
 TBApp: Type[Sanic[Config, Context]] = Sanic[Config, Context]

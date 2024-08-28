@@ -2,13 +2,15 @@ import logging
 
 import aiotieba
 from argon2 import PasswordHasher
-from pydantic import ValidationError
+from pydantic import ValidationError as PydanticValidationError
 from sanic import FileNotFound, SanicException
 from sanic.log import logger
 from sanic.response import file
 from sanic_ext import Extend
+from sanic_ext.exceptions import ValidationError as SanicValidationError
 
-from core.exception import ArgException, FirstLoginError
+from core.exception import ArgException, Unauthorized
+from core.exception import ExecutorNotFoundError
 from core.jwt import init_jwt
 from core.models import init_database
 from core.setting import config, SERVER_NAME
@@ -44,22 +46,30 @@ async def init_server(_app: TBApp):
 async def first_login_check(rqt: TBRequest):
     is_first = rqt.app.ctx.config.first_start
     if is_first and rqt.path != '/api/account/login/first' and rqt.path.startswith("/api"):
-        raise FirstLoginError(is_first)
+        return json("尚未创建管理员账户", status_code=404)
 
 
-@app.exception(FileNotFound, ArgException, FirstLoginError, ValidationError)
+@app.exception(
+    FileNotFound,
+    ArgException,
+    PydanticValidationError,
+    SanicValidationError,
+    ExecutorNotFoundError,
+)
 async def exception_handle(rqt: TBRequest, e: SanicException):
     if isinstance(e, FileNotFound):
-        return await file("./web/index.html", status=404)
+        if rqt.app.ctx.config.server.web:
+            return await file("./web/index.html", status=404)
+        else:
+            return json("FileNotFound", status_code=404)
     elif isinstance(e, ArgException):
         return json(e.message, status_code=e.status_code)
-    elif isinstance(e, FirstLoginError):
-        is_first = e.is_first
-        if is_first is None:
-            is_first = True
-        return json(e.message, {"is_first": is_first}, 403)
-    elif isinstance(e, ValidationError):
+    elif isinstance(e, (PydanticValidationError, SanicValidationError)):
         return json("参数错误")
+    elif isinstance(e, ExecutorNotFoundError):
+        return json(e.message, status_code=e.status_code)
+    elif isinstance(e, Unauthorized):
+        return json(e.message, status_code=e.status_code)
 
 
 if app.ctx.config.server.web:

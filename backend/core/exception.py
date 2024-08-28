@@ -15,9 +15,11 @@ class ArgException(TiebaAdminException):
     message = "参数错误"
 
 
-class FirstLoginError(TiebaAdminException):
-    status_code = 403
-    message = "第一次登录错误"
+class ExecutorNotFoundError(TiebaAdminException):
+    status_code = 404
+    message = "没有发现可用执行者账户"
 
-    def __init__(self, is_first):
-        self.is_first = is_first
+
+class Unauthorized(TiebaAdminException):
+    status_code = 401
+    message = "权限不足"

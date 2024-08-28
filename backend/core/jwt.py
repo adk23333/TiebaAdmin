@@ -6,6 +6,7 @@ from sanic_jwt import Configuration, Responses, exceptions, Initialize, Authenti
 from sanic_jwt.exceptions import AuthenticationFailed
 
 from .enum import Permission
+from .exception import Unauthorized
 from .models import User, ForumPermission
 from .types import TBApp
 from .utils import json
@@ -32,7 +33,7 @@ def init_jwt(app: TBApp):
             elif isinstance(exception, exceptions.AuthenticationFailed):
                 msg = str(exception)
             elif isinstance(exception, exceptions.Unauthorized):
-                msg = "您没有访问该接口的权限"
+                msg = Unauthorized.message
             else:
                 if "expired" in msg:
                     msg = "授权已失效，请重新登录！"

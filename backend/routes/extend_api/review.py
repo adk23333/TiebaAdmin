@@ -1,6 +1,8 @@
 ﻿from pydantic import BaseModel
 from sanic import Blueprint
+from sanic_jwt import scoped
 
+from core.enum import Permission
 from core.types import TBRequest
 from core.utils import json
 from extend.review import Reviewer, ReviewForum
@@ -9,6 +11,7 @@ bp_review = Blueprint("review", url_prefix="/review")
 
 
 @bp_review.get("/config")
+@scoped(Permission.GE_MIN_ADMIN.scopes, False)
 async def get_config(rqt: TBRequest):
     return json(data=rqt.app.ctx.config.extend.review.dict())
 
@@ -29,6 +32,7 @@ def get_bot_status(rqt: TBRequest):
 
 
 @bp_review.post("/bot/status/<action>")
+@scoped(Permission.GE_HIGH_ADMIN.scopes, False)
 async def bot_actions(rqt: TBRequest, action: str):
     match action:
         case "get":
@@ -45,6 +49,7 @@ async def bot_actions(rqt: TBRequest, action: str):
 
 
 @bp_review.post("/dev/<action>")
+@scoped(Permission.GE_HIGH_ADMIN.scopes, False)
 async def dev_actions(rqt: TBRequest, action: str):
     match action:
         case "get":
@@ -61,6 +66,7 @@ async def dev_actions(rqt: TBRequest, action: str):
 
 
 @bp_review.post("/keyword/<action>")
+@scoped(Permission.GE_HIGH_ADMIN.scopes, False)
 async def keyword_actions(rqt: TBRequest, action: str):
     match action:
         case "get":
@@ -78,6 +84,7 @@ async def keyword_actions(rqt: TBRequest, action: str):
 
 
 @bp_review.post("/forum/<action>")
+@scoped(Permission.GE_SUPER_ADMIN.scopes, False)
 async def forum_action(rqt: TBRequest, action: str):
     match action:
         case "get":

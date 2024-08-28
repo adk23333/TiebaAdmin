@@ -77,8 +77,8 @@ class User(BaseModel):
     enable_login = fields.BooleanField(default=False)
     password = fields.CharField(max_length=128, null=True, default=None)
 
-    BDUSS = fields.CharField(max_length=200, null=True, default='')
-    STOKEN = fields.CharField(max_length=80, null=True, default='')
+    BDUSS = fields.CharField(max_length=200, default="")
+    STOKEN = fields.CharField(max_length=80, default="")
 
     permissions: fields.ReverseRelation["ForumPermission"]
 
