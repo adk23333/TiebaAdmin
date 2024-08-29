@@ -5,7 +5,7 @@ from sanic_ext import validate
 from sanic_jwt import scoped
 
 from core.enum import Permission
-from core.exception import ExecutorNotFoundError, Unauthorized
+from core.exception import ExecutorNotFoundError, Unauthorized, ArgException
 from core.models import User, ForumPermission
 from core.types import TBRequest
 from core.utils import json, validate_password
@@ -22,7 +22,7 @@ async def get_users(rqt: Request):
 
 
 class UserFrom(BaseModel):
-    user: str
+    user: str = None
     password: str = None
     enable_login: bool = False
     BDUSS: str = ""
@@ -33,24 +33,35 @@ class UserFrom(BaseModel):
 @validate(form=UserFrom)
 @scoped(Permission.GE_SUPER_ADMIN.scopes, False)
 async def update_user(rqt: TBRequest, body: UserFrom):
+    if body.user is None and body.BDUSS == "":
+        raise ArgException("user和BDUSS参数需有其一")
+
     if body.password is None or body.password == "":
         pwd = None
     else:
         validate_password(body.password)
         pwd = rqt.app.ctx.password_hasher.hash(body.password)
 
-    fp = await ForumPermission.get_or_none(is_executor=True)
-    if fp is None:
-        raise ExecutorNotFoundError
-    user = await fp.user.get()
-    async with Client(user.BDUSS, user.STOKEN) as client:
-        tb_user = await client.get_user_info(body.user)
+    if body.BDUSS != "":
+        async with Client(body.BDUSS, body.STOKEN) as client:
+            tb_user = await client.get_self_info()
+    else:
+        tb_user = None
+
+    if tb_user is None:
+        fp = await ForumPermission.get_or_none(is_executor=True)
+        if fp is None:
+            raise ExecutorNotFoundError
+        user = await fp.user.get()
+        async with Client(user.BDUSS, user.STOKEN) as client:
+            tb_user = await client.get_user_info(body.user)
 
     user = await User.get_or_none(user_id=tb_user.user_id)
     if user is None:
-        await User.create(
+        uid = tb_user.tieba_uid
+        user = await User.create(
             user_id=tb_user.user_id,
-            UID=tb_user.tieba_uid,
+            UID=None if uid == 0 else uid,
             username=tb_user.user_name,
             enable_login=body.enable_login,
             password=pwd,
