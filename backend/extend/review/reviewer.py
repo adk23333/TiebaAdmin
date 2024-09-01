@@ -16,9 +16,6 @@ from .models import Thread as RThread
 
 
 class Reviewer:
-    """
-    继承自Plugin基类
-    """
 
     def __init__(self, app: TBApp = None):
         self.app = app
@@ -42,7 +39,7 @@ class Reviewer:
         need_next_check: List[Thread] = []
 
         async def check_and_execute(ce_thread: Thread):
-            executor = Executor(client=client, obj=ce_thread)
+            executor = Executor(obj=ce_thread)
 
             async def get_execute(_check):
                 if _check['function'].__name__ not in self.functions.get(ce_thread.fname, ()):
@@ -55,7 +52,7 @@ class Reviewer:
             await asyncio.gather(*[get_execute(check) for check in self.check_map['thread']])
 
             if not self.dev:
-                await executor.run()
+                await executor.run(client)
             else:
                 logger.debug(f"[review] [Thread] {executor}")
 
@@ -131,7 +128,7 @@ class Reviewer:
         need_next_check: List[Post] = []
 
         async def check_and_execute(ce_post: Post):
-            executor = Executor(client=client, obj=ce_post)
+            executor = Executor(obj=ce_post)
 
             async def get_execute(_check):
                 if _check['function'].__name__ not in self.functions.get(ce_post.fname, ()):
@@ -144,7 +141,7 @@ class Reviewer:
             await asyncio.gather(*[get_execute(check) for check in self.check_map['post']])
 
             if not self.dev:
-                await executor.run()
+                await executor.run(client)
             else:
                 logger.debug(f"[review] [Post] {executor}")
 
@@ -190,7 +187,7 @@ class Reviewer:
             comments = post.comments
 
         async def check_and_execute(cae_comment: Comment):
-            executor = Executor(client=client, obj=cae_comment)
+            executor = Executor(obj=cae_comment)
 
             async def get_execute(_check):
                 if _check['function'].__name__ not in self.functions.get(cae_comment.fname, ()):
@@ -203,7 +200,7 @@ class Reviewer:
             await asyncio.gather(*[get_execute(check) for check in self.check_map['comment']])
 
             if not self.dev:
-                await executor.run()
+                await executor.run(client)
             else:
                 logger.debug(f"[review] [Comment] {executor}")
 

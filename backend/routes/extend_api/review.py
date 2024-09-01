@@ -5,7 +5,7 @@ from sanic_jwt import scoped
 from core.enum import Permission
 from core.types import TBRequest
 from core.utils import json
-from extend.review import Reviewer, ReviewForum
+from extend.review import Reviewer, ReviewConfig
 
 bp_review = Blueprint("review", url_prefix="/review")
 
@@ -34,68 +34,33 @@ def get_bot_status(rqt: TBRequest):
 @bp_review.post("/bot/status/<action>")
 @scoped(Permission.GE_HIGH_ADMIN.scopes, False)
 async def bot_actions(rqt: TBRequest, action: str):
+    status = get_bot_status(rqt)
     match action:
         case "get":
-            return json(data=BotStatus(name="review", status=get_bot_status(rqt)).dict())
+            return json(data=BotStatus(name="review", status=status).dict())
         case "start":
-            reviewer = Reviewer(rqt.app)
-            _ = rqt.app.add_task(reviewer.start(), name="review")
-            return json(data=BotStatus(name="review", status=get_bot_status(rqt)).dict())
+            if not status:
+                reviewer = Reviewer(rqt.app)
+                _ = rqt.app.add_task(reviewer.start(), name="review")
+            return json(data=BotStatus(name="review", status=status).dict())
         case "stop":
-            await rqt.app.cancel_task(name="review", raise_exception=False)
-            return json(data=BotStatus(name="review", status=get_bot_status(rqt)).dict())
+            if status:
+                await rqt.app.cancel_task(name="review", raise_exception=False)
+            return json(data=BotStatus(name="review", status=status).dict())
         case _:
             return json("未知操作")
 
 
-@bp_review.post("/dev/<action>")
-@scoped(Permission.GE_HIGH_ADMIN.scopes, False)
-async def dev_actions(rqt: TBRequest, action: str):
-    match action:
-        case "get":
-            return json(data=rqt.app.ctx.config.extend.review.dev)
-        case "update":
-            if rqt.form.get("dev", 1) == "1":
-                rqt.app.ctx.config.extend.review.dev = True
-            else:
-                rqt.app.ctx.config.extend.review.dev = False
-            rqt.app.ctx.config.dump()
-            return json(data=rqt.app.ctx.config.extend.review.dev)
-        case _:
-            return json("未知操作")
-
-
-@bp_review.post("/keyword/<action>")
-@scoped(Permission.GE_HIGH_ADMIN.scopes, False)
-async def keyword_actions(rqt: TBRequest, action: str):
-    match action:
-        case "get":
-            return json(data=rqt.app.ctx.config.extend.review.keywords)
-        case "update":
-            data = rqt.json
-            if isinstance(data, list):
-                rqt.app.ctx.config.extend.review.keywords = data
-                rqt.app.ctx.config.dump()
-                return json(data=rqt.app.ctx.config.extend.review.keywords)
-            else:
-                return json("请按正确的格式上传关键词")
-        case _:
-            return json("未知操作")
-
-
-@bp_review.post("/forum/<action>")
+@bp_review.post("/config/<action>")
 @scoped(Permission.GE_SUPER_ADMIN.scopes, False)
-async def forum_action(rqt: TBRequest, action: str):
+async def config_actions(rqt: TBRequest, action: str):
     match action:
         case "get":
-            return json(data=rqt.app.ctx.config.extend.review.forums)
+            return json(data=rqt.app.ctx.config.extend.review.dict())
         case "update":
-            data = rqt.json
-            if isinstance(data, list):
-                rqt.app.ctx.config.extend.review.forums = [ReviewForum(**i) for i in data]
-                rqt.app.ctx.config.dump()
-                return json(data=rqt.app.ctx.config.extend.review.dict()["forums"])
-            else:
-                return json("请按正确的格式上传贴吧列表")
+            body = ReviewConfig(**rqt.json)
+            rqt.app.ctx.config.extend.review = body
+            rqt.app.ctx.config.dump()
+            return json(data=rqt.app.ctx.config.extend.review.dict())
         case _:
             return json("未知操作")

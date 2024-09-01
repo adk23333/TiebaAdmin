@@ -4,6 +4,7 @@ from pathlib import Path
 import tomli_w
 from pydantic import BaseModel, Field
 
+from extend.command import CommandConfig
 from extend.review import ReviewConfig
 
 CONFIG_FILE_PATH = "config.toml"
@@ -53,6 +54,7 @@ class Config(BaseModel):
 
 class ExtendConfig(BaseModel):
     review: ReviewConfig = Field(description="review扩展的配置")
+    command: CommandConfig = Field(description="command扩展的配置")
 
 
 config = Config.load()

@@ -3,8 +3,8 @@ from functools import wraps
 from typing import Callable, Union, Coroutine, Any, Dict, Literal, List
 
 from aiotieba import Client
-from aiotieba.api.get_comments import Comment, Comment as Tb_Comment
-from aiotieba.api.get_posts import Post, Post as Tb_Post
+from aiotieba.api.get_comments import Comment, Comment as Tb_Comment, Post_c
+from aiotieba.api.get_posts import Post, Post as Tb_Post, Thread_p
 from aiotieba.api.get_threads import Thread, Thread as Tb_Thread
 from aiotieba.typing import UserInfo
 from sanic.logging.loggers import logger
@@ -23,22 +23,20 @@ class Executor(object):
     所有操作都应该使用此类包装后统一处理.
 
     Attributes:
-        client: 传入了执行账号的贴吧客户端.
         obj: 待处理的贴子.
         user_opt: 对待处理贴子的发送者的处理.
         option: 对贴子的处理.
         user_day: 对发送者的操作持续时间.
         opt_day: 对贴子的操作持续时间.
     """
-    client: Client = None
-    obj: Union[Tb_Thread, Tb_Post, Tb_Comment, None] = None
+    obj: Union[Tb_Thread, Tb_Post, Tb_Comment] = None
     user_opt: ExecuteType = ExecuteType.Empty
     option: ExecuteType = ExecuteType.Empty
     user_day: int = 0
     opt_day: int = 0
     note: set[str] = ()
 
-    async def run(self):
+    async def run(self, client: Client = None):
         """
         执行操作
         Returns:
@@ -48,20 +46,23 @@ class Executor(object):
 
         note = ",".join(self.note)
 
-        user: UserInfo = await self.client.get_self_info()
+        if client is None:
+            return None
+
+        user: UserInfo = await client.get_self_info()
         rst = True
         match self.user_opt:
             case ExecuteType.Empty:
                 pass
             case ExecuteType.Block:
-                rst = await self.client.block(self.obj.fid, self.obj.user.portrait, day=self.user_day)
+                rst = await client.block(self.obj.fid, self.obj.user.portrait, day=self.user_day)
                 await ExecuteLog.create(plugin="review",
                                         user=f"[{BOT_PREFIX}] {user.user_name}",
                                         type=ExecuteType.Block,
                                         obj=self.obj.user.user_name,
                                         note=f"[{note}] {self.user_day}")
             case ExecuteType.Black:
-                rst = await self.client.add_bawu_blacklist(self.obj.fname, self.obj.user.portrait)
+                rst = await client.add_bawu_blacklist(self.obj.fname, self.obj.user.portrait)
                 await ExecuteLog.create(plugin="review",
                                         user=f"[{BOT_PREFIX}] {user.user_name}",
                                         type=ExecuteType.Black,
@@ -69,12 +70,15 @@ class Executor(object):
                                         note=f"[{note}]")
         if not rst:
             logger.warning(rst.err)
+
+        if self.obj is None:
+            return None
         rst = True
         match self.option:
             case ExecuteType.Empty:
                 pass
             case ExecuteType.ThreadHide:
-                rst = await self.client.hide_thread(self.obj.fid, self.obj.tid)
+                rst = await client.hide_thread(self.obj.fid, self.obj.tid)
                 await ExecuteLog.create(plugin="review",
                                         user=f"[{BOT_PREFIX}] {user.user_name}",
                                         type=ExecuteType.Hide,
@@ -82,7 +86,7 @@ class Executor(object):
                                         note=f"[{note}] {self.obj.title}")
 
             case ExecuteType.ThreadDelete:
-                rst = await self.client.del_thread(self.obj.fid, self.obj.tid)
+                rst = await client.del_thread(self.obj.fid, self.obj.tid)
                 await ExecuteLog.create(plugin="review",
                                         user=f"[{BOT_PREFIX}]{user.user_name}",
                                         type=ExecuteType.ThreadDelete,
@@ -90,7 +94,7 @@ class Executor(object):
                                         note=f"[{note}] {self.obj.title}")
 
             case ExecuteType.PostDelete:
-                rst = await self.client.del_post(self.obj.fid, self.obj.tid, self.obj.pid)
+                rst = await client.del_post(self.obj.fid, self.obj.tid, self.obj.pid)
                 await ExecuteLog.create(plugin="review",
                                         user=f"[{BOT_PREFIX}]{user.user_name}",
                                         type=ExecuteType.PostDelete,
@@ -98,7 +102,7 @@ class Executor(object):
                                         note=f"[{note}] {cut_string(self.obj.text, 20, '...')}")
 
             case ExecuteType.CommentDelete:
-                rst = await self.client.del_post(self.obj.fid, self.obj.tid, self.obj.pid)
+                rst = await client.del_post(self.obj.fid, self.obj.tid, self.obj.pid)
                 await ExecuteLog.create(plugin="review",
                                         user=f"[{BOT_PREFIX}]{user.user_name}",
                                         type=ExecuteType.CommentDelete,
@@ -266,11 +270,10 @@ def empty():
     return Executor()
 
 
-def hide(client: Client, thread: Tb_Thread, day: int = 1, func_name: str = ""):
+def hide(thread: Tb_Thread, day: int = 1, func_name: str = ""):
     """
     返回屏蔽主题贴的操作
     Args:
-        client: 传入了执行账号的贴吧客户端
         thread: 待处理主题贴
         day: 屏蔽持续时间（单位：天）
         func_name: 调用该方法的方法的名称
@@ -279,7 +282,6 @@ def hide(client: Client, thread: Tb_Thread, day: int = 1, func_name: str = ""):
         Executor
     """
     return Executor(
-        client,
         thread,
         option=ExecuteType.ThreadHide,
         opt_day=day,
@@ -287,14 +289,12 @@ def hide(client: Client, thread: Tb_Thread, day: int = 1, func_name: str = ""):
     )
 
 
-def delete(client: Client,
-           obj: Union[Tb_Thread, Tb_Post, Tb_Comment],
-           day: Literal[-1, 0, 1, 3, 10] = 0,
+def delete(obj: Union[Tb_Thread, Tb_Post, Tb_Comment],
+           day: int = 0,
            func_name: str = ""):
     """
     返回删除主题贴的操作
     Args:
-        client: 传入了执行账号的贴吧客户端
         obj: 待处理的主题贴/楼/楼中楼
         day: 对发送者的封禁持续时间（单位：天）-1是永封
         func_name: 调用该方法的方法的名称
@@ -302,75 +302,103 @@ def delete(client: Client,
     Returns:
         Executor
     """
-    if isinstance(obj, Tb_Thread):
+    if isinstance(obj, (Tb_Thread, Thread_p)):
         option = ExecuteType.ThreadDelete
-    elif isinstance(obj, Tb_Post):
+    elif isinstance(obj, (Tb_Post, Post_c)):
         option = ExecuteType.PostDelete
     elif isinstance(obj, Tb_Comment):
         option = ExecuteType.CommentDelete
     else:
         option = ExecuteType.Empty
 
-    if day:
-        if day == -1:
-            user_opt = ExecuteType.Black
-        else:
-            user_opt = ExecuteType.Block
+    if day <= -1:
+        user_opt = ExecuteType.Black
         return Executor(
-            client,
             obj,
             option=option,
             user_opt=user_opt,
             user_day=day,
             note={func_name},
         )
-    else:
+    elif day == 0:
         return Executor(
-            client,
             obj,
             option=option,
             note={func_name},
         )
+    elif 1 <= day < 3:
+        user_opt = ExecuteType.Block
+        return Executor(
+            obj,
+            option=option,
+            user_opt=user_opt,
+            user_day=1,
+            note={func_name},
+        )
+    elif 3 <= day < 5:
+        user_opt = ExecuteType.Block
+        return Executor(
+            obj,
+            option=option,
+            user_opt=user_opt,
+            user_day=3,
+            note={func_name},
+        )
+    elif 5 <= day < 90:
+        user_opt = ExecuteType.Block
+        return Executor(
+            obj,
+            option=option,
+            user_opt=user_opt,
+            user_day=10,
+            note={func_name},
+        )
+    else:
+        user_opt = ExecuteType.Block
+        return Executor(
+            obj,
+            option=option,
+            user_opt=user_opt,
+            user_day=90,
+            note={func_name},
+        )
 
 
-def block(client: Client,
-          obj: Union[Tb_Thread, Tb_Post, Tb_Comment],
-          day: Literal[1, 3, 10] = 1,
-          func_name: str = ""):
+def block(day: int = 1, func_name: str = ""):
     """
     返回封禁操作
     Args:
-        client: 传入了执行账号的贴吧客户端
-        obj: 待处理的主题贴/楼/楼中楼
         day: 封禁时间（单位：天）
         func_name: 调用该方法的方法的名称
 
     Returns:
         Executor
     """
+    if 1 <= day < 3:
+        _day = 1
+    elif 3 <= day < 5:
+        _day = 3
+    elif 5 <= day < 90:
+        _day = 10
+    else:
+        _day = 90
     return Executor(
-        client,
-        obj,
         user_opt=ExecuteType.Block,
-        user_day=day,
+        user_day=_day,
         note={func_name},
     )
 
 
-def black(client: Client, obj: Union[Tb_Thread, Tb_Post, Tb_Comment], func_name: str = ""):
+def black(func_name: str = ""):
     """
     返回加入黑名单操作
     Args:
-        client: 传入了执行账号的贴吧客户端
-        obj: 待处理的主题贴/楼/楼中楼
         func_name: 调用该方法的方法的名称
 
     Returns:
         Executor
     """
     return Executor(
-        client,
-        obj,
         user_opt=ExecuteType.Black,
         note={func_name},
     )
