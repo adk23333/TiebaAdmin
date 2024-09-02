@@ -15,6 +15,9 @@ from core.utils import cut_string
 
 BOT_PREFIX = "Bot"
 
+UnionTbThread = Union[Tb_Thread, Thread_p]
+UnionTbPost = Union[Tb_Post, Post_c]
+
 
 @dataclass
 class Executor(object):
@@ -29,7 +32,7 @@ class Executor(object):
         user_day: 对发送者的操作持续时间.
         opt_day: 对贴子的操作持续时间.
     """
-    obj: Union[Tb_Thread, Tb_Post, Tb_Comment] = None
+    obj: Union[UnionTbThread, UnionTbPost, Tb_Comment] = None
     user_opt: ExecuteType = ExecuteType.Empty
     option: ExecuteType = ExecuteType.Empty
     user_day: int = 0
@@ -46,7 +49,7 @@ class Executor(object):
 
         note = ",".join(self.note)
 
-        if client is None:
+        if client is None or self.obj is None:
             return None
 
         user: UserInfo = await client.get_self_info()
@@ -71,8 +74,6 @@ class Executor(object):
         if not rst:
             logger.warning(rst.err)
 
-        if self.obj is None:
-            return None
         rst = True
         match self.option:
             case ExecuteType.Empty:
@@ -270,7 +271,7 @@ def empty():
     return Executor()
 
 
-def hide(thread: Tb_Thread, day: int = 1, func_name: str = ""):
+def hide(thread: UnionTbThread, day: int = 1, func_name: str = ""):
     """
     返回屏蔽主题贴的操作
     Args:
@@ -289,7 +290,7 @@ def hide(thread: Tb_Thread, day: int = 1, func_name: str = ""):
     )
 
 
-def delete(obj: Union[Tb_Thread, Tb_Post, Tb_Comment],
+def delete(obj: Union[UnionTbThread, UnionTbPost, Tb_Comment],
            day: int = 0,
            func_name: str = ""):
     """

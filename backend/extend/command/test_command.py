@@ -18,6 +18,7 @@ class TestCommand(unittest.IsolatedAsyncioTestCase):
     async def test_command(self):
         user = await User.get(user_id=os.environ["TEST_USER_ID"])
         self.command.db_listener = user
+        self.command.forums = os.environ["TEST_FORUMS"].split(",")
         async with Client(user.BDUSS, user.STOKEN) as client:
             await self.command._start(client)
 

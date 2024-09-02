@@ -1,5 +1,4 @@
 ﻿import asyncio
-from dataclasses import fields
 from typing import List, Tuple, Optional
 
 from aiotieba import Client, PostSortType
@@ -9,6 +8,7 @@ from aiotieba.api.get_posts import Thread_p
 from aiotieba.typing import Comments, Posts
 from sanic.logging.loggers import logger
 
+from core.enum import Permission
 from core.models import User, ForumPermission
 from core.types import TBApp
 from extend.command.command import BaseCommand, COMMAND_MAP
@@ -48,7 +48,7 @@ class CommandHandle:
 
         results = await asyncio.gather(*[
             self.inject_executor(at, listener) for at in ats if at.fname in self.forums
-        ], return_exceptions=True)
+        ], return_exceptions=False)
         for r in results:
             if isinstance(r, Exception):
                 logger.warning(r)
@@ -61,14 +61,14 @@ class CommandHandle:
                 await self._catch_at(at, listener, executor)
 
     async def _catch_at(self, at: At, listener: Client, executor: Client):
-        ctx = await self.at2ctx(at, listener, executor)
-        if ctx is not None and await ctx.check_permission():
+        ctx, parent = await self.at2ctx(at, listener)
+        if ctx is not None and await self.check_permission(at, ctx):
             if at.is_thread:
                 await executor.del_thread(at.fname, tid=at.tid)
             else:
                 await executor.del_post(at.fname, tid=at.tid, pid=at.pid)
 
-            _exec = await ctx.handle_function()
+            _exec = await ctx.handle_function(at, listener, executor, parent)
             await _exec.run(executor)
 
     def _parse(self, _text: str):
@@ -85,9 +85,7 @@ class CommandHandle:
 
     async def at2ctx(self,
                      at: At,
-                     listener: Client,
-                     executor: Client,
-                     ) -> BaseCommand | None:
+                     listener: Client):
         parent: Optional[Thread_p | Post_c] = None
         if len(at.text.encode('utf-8')) >= 78:
             _text, parent = await self.get_full_text(at, listener)
@@ -100,9 +98,8 @@ class CommandHandle:
 
                 kwargs = {}
                 index = 1
-                fields_name = [i.name for i in fields(Context)]
-                for key in fields_name:
-                    if key not in ("cmd_args", "at", "listener", "parent", "executor"):
+                for key in Context.model_fields:
+                    if key not in ("cmd_args", "at"):
                         try:
                             kwargs[key] = _args[index]
                         except IndexError:
@@ -111,12 +108,9 @@ class CommandHandle:
                 kwargs.update({
                     "cmd_args": tuple(_args[index:]),
                     "at": at,
-                    "listener": listener,
-                    "parent": parent,
-                    "executor": executor,
                 })
                 ctx: BaseCommand = Context(**kwargs)
-                return ctx
+                return ctx, parent
 
     async def get_full_text(self, at: At, listener: Client) -> Tuple[str, Post_c | Thread_p]:
         if at.is_comment:
@@ -141,3 +135,16 @@ class CommandHandle:
                     break
             posts: Posts = await listener.get_posts(at.tid, rn=0)
             return text, posts.thread
+
+    @staticmethod
+    async def check_permission(at: At, ctx: BaseCommand):
+        fp = await ForumPermission.get_or_none(user_id=at.author_id, forum=at.fname)
+        if fp is None:
+            pm = Permission.ORDINARY
+        else:
+            pm = Permission(fp.permission)
+
+        if pm in ctx.permission():
+            return True
+        else:
+            return False
