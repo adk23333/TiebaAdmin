@@ -3,7 +3,7 @@ from pathlib import Path
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
-from sanic.logging.loggers import logger
+from sanic.log import logger
 from sanic_jwt.exceptions import AuthenticationFailed
 from tortoise import Model, fields, Tortoise, log
 from tortoise.exceptions import DoesNotExist
@@ -73,6 +73,7 @@ class User(BaseModel):
     user_id = fields.CharField(pk=True, max_length=64)
     UID = fields.CharField(max_length=64, null=True, default=None)
     username = fields.CharField(max_length=64)
+    showname = fields.CharField(max_length=64)
 
     enable_login = fields.BooleanField(default=False)
     password = fields.CharField(max_length=128, null=True, default=None)
@@ -140,11 +141,11 @@ class ExecuteLog(BaseModel):
         note: 备注
     """
     log_id = fields.BigIntField(pk=True)
-    plugin = fields.CharField(max_length=64, default="TA")
     user = fields.CharField(64)
-    type = fields.IntField()
-    obj = fields.CharField(64)
-    note = fields.TextField(default="")
+    type = fields.CharField(max_length=64)
+    plugin = fields.CharField(max_length=64, null=True, default=None)
+    obj = fields.CharField(64, null=True, default=None)
+    note = fields.TextField(null=True, default=None)
 
     class Meta:
         table = "execute_log"

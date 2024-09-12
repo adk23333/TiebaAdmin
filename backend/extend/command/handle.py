@@ -6,7 +6,8 @@ from aiotieba.api.get_ats import Ats, At
 from aiotieba.api.get_comments import Post_c
 from aiotieba.api.get_posts import Thread_p
 from aiotieba.typing import Comments, Posts
-from sanic.logging.loggers import logger
+from pydantic import ValidationError
+from sanic.log import logger
 
 from core.enum import Permission
 from core.models import User, ForumPermission
@@ -15,6 +16,8 @@ from extend.command.command import BaseCommand, COMMAND_MAP
 
 
 class CommandHandle:
+    name = "command"
+
     def __init__(self, app: TBApp = None):
         self.app = app
         self.last_exec_time = 0
@@ -28,16 +31,20 @@ class CommandHandle:
             self.forums = config.extend.command.forums
 
     async def start(self):
-        if self.app is not None:
-            self.get_config()
+        logger.info(f"[{self.name}] start")
+        try:
+            if self.app is not None:
+                self.get_config()
 
-        self.db_listener = await User.get_or_none(user_id=self.listener_id)
-        if self.db_listener is not None:
-            while True:
-                async with Client(self.db_listener.BDUSS, self.db_listener.STOKEN) as listener:
-                    await self._start(listener)
+            self.db_listener = await User.get_or_none(user_id=self.listener_id)
+            if self.db_listener is not None:
+                while True:
+                    async with Client(self.db_listener.BDUSS, self.db_listener.STOKEN) as listener:
+                        await self._start(listener)
 
-                await asyncio.sleep(10)
+                    await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            logger.info(f"[{self.name}] stopped")
 
     async def _start(self, listener: Client):
         ats: Ats = await listener.get_ats()
@@ -69,13 +76,15 @@ class CommandHandle:
                 await executor.del_post(at.fname, tid=at.tid, pid=at.pid)
 
             _exec = await ctx.handle_function(at, listener, executor, parent)
+            _exec.set_base_info(self.name, at.user.show_name)
             await _exec.run(executor)
 
     def _parse(self, _text: str):
-        prefix = f"@{self.db_listener.username} "
-        if not _text.startswith(prefix):
+        prefix = f"@{self.db_listener.showname}"
+        index = _text.find(prefix)
+        if index == -1:
             return None
-        text = _text.removeprefix(prefix)
+        text = _text[index + len(prefix):]
 
         _args = [arg.lstrip(' ') for arg in text.split(' ') if arg]
         if not _args:
@@ -86,9 +95,12 @@ class CommandHandle:
     async def at2ctx(self,
                      at: At,
                      listener: Client):
+
         parent: Optional[Thread_p | Post_c] = None
         if len(at.text.encode('utf-8')) >= 78:
             _text, parent = await self.get_full_text(at, listener)
+            if _text is None:
+                return None, None
         else:
             _text = at.text
 
@@ -109,10 +121,14 @@ class CommandHandle:
                     "cmd_args": tuple(_args[index:]),
                     "at": at,
                 })
-                ctx: BaseCommand = Context(**kwargs)
+                try:
+                    ctx: BaseCommand = Context(**kwargs)
+                except ValidationError:
+                    return None, None
                 return ctx, parent
+        return None, None
 
-    async def get_full_text(self, at: At, listener: Client) -> Tuple[str, Post_c | Thread_p]:
+    async def get_full_text(self, at: At, listener: Client) -> Tuple[str | None, Post_c | Thread_p | None]:
         if at.is_comment:
             await asyncio.sleep(3.0)
             comments: Comments = await listener.get_comments(at.tid, at.pid, is_comment=True)
@@ -135,6 +151,8 @@ class CommandHandle:
                     break
             posts: Posts = await listener.get_posts(at.tid, rn=0)
             return text, posts.thread
+
+        return None, None
 
     @staticmethod
     async def check_permission(at: At, ctx: BaseCommand):

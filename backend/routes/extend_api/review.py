@@ -38,17 +38,21 @@ async def bot_actions(rqt: TBRequest, action: str):
     match action:
         case "get":
             return json(data=BotStatus(name="review", status=status).dict())
+
         case "start":
             if not status:
                 reviewer = Reviewer(rqt.app)
                 _ = rqt.app.add_task(reviewer.start(), name="review")
-            return json(data=BotStatus(name="review", status=status).dict())
+
         case "stop":
             if status:
                 await rqt.app.cancel_task(name="review", raise_exception=False)
-            return json(data=BotStatus(name="review", status=status).dict())
+
         case _:
             return json("未知操作")
+
+    status = get_bot_status(rqt)
+    return json(data=BotStatus(name="review", status=status).dict())
 
 
 @bp_review.post("/config/<action>")

@@ -1,4 +1,7 @@
+from typing import Optional
+
 from aiotieba import Client
+from aiotieba.api._classdef import UserInfo
 from pydantic import BaseModel
 from sanic import Blueprint, Request
 from sanic_ext import validate
@@ -46,7 +49,7 @@ async def update_user(rqt: TBRequest, body: UserFrom):
         async with Client(body.BDUSS, body.STOKEN) as client:
             tb_user = await client.get_self_info()
     else:
-        tb_user = None
+        tb_user: Optional[UserInfo] = None
 
     if tb_user is None:
         fp = await ForumPermission.get_or_none(is_executor=True)
@@ -54,7 +57,7 @@ async def update_user(rqt: TBRequest, body: UserFrom):
             raise ExecutorNotFoundError
         user = await fp.user.get()
         async with Client(user.BDUSS, user.STOKEN) as client:
-            tb_user = await client.get_user_info(body.user)
+            tb_user: UserInfo = await client.get_user_info(body.user)
 
     user = await User.get_or_none(user_id=tb_user.user_id)
     if user is None:
@@ -63,6 +66,7 @@ async def update_user(rqt: TBRequest, body: UserFrom):
             user_id=tb_user.user_id,
             UID=None if uid == 0 else uid,
             username=tb_user.user_name,
+            showname=tb_user.show_name,
             enable_login=body.enable_login,
             password=pwd,
             BDUSS=body.BDUSS,

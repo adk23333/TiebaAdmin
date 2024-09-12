@@ -1,4 +1,5 @@
 ﻿import aiotieba
+from aiotieba.api._classdef import UserInfo
 from pydantic import BaseModel
 from sanic import Blueprint
 from sanic_ext import validate
@@ -44,12 +45,13 @@ async def first_login_api(rqt: TBRequest, body: FirstLogin):
     validate_password(body.password)
 
     async with aiotieba.Client(body.BDUSS, body.STOKEN) as client:
-        user = await client.get_self_info()
+        user: UserInfo = await client.get_self_info()
 
     await User.create(
         user_id=user.user_id,
         UID=user.tieba_uid,
         username=user.user_name,
+        showname=user.show_name,
         password=rqt.app.ctx.password_hasher.hash(body.password),
         enable_login=True,
         BDUSS=body.BDUSS,

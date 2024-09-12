@@ -7,10 +7,10 @@ from aiotieba.api.get_ats import At
 from aiotieba.api.get_comments import Comments
 from aiotieba.api.get_posts import Posts
 from pydantic import BaseModel
-from sanic.logging.loggers import logger
+from sanic.log import logger
 
 from core.enum import Permission
-from extend.review.checker_manage import Executor, empty, delete
+from extend.review.executor import Executor, empty, delete, set_permission
 
 COMMAND_MAP: Dict[str, Type["BaseCommand"]] = {}
 
@@ -89,7 +89,7 @@ class DeleteCommand(BaseCommand):
                               parent=None) -> Executor:
         if parent is None:
             parent = await self.get_parent(at, listener)
-        return delete(parent, 0, self.__class__.__name__)
+        return delete(parent, note=self.command())
 
 
 class DeleteBlockCommand(BaseCommand):
@@ -110,4 +110,29 @@ class DeleteBlockCommand(BaseCommand):
                               parent=None) -> Executor:
         if parent is None:
             parent = await self.get_parent(at, listener)
-        return delete(parent, self.day)
+        return delete(parent, self.day, self.command())
+
+
+class PermissionCommand(BaseCommand):
+    set_pm: str
+    user: str
+
+    @staticmethod
+    def command() -> str:
+        return '权限'
+
+    @staticmethod
+    def permission() -> Permission:
+        return Permission.GE_SUPER_ADMIN
+
+    async def handle_function(self,
+                              at: At,
+                              listener: Client,
+                              executor: Client,
+                              parent=None) -> Executor:
+        permission = Permission.convert_zh(self.set_pm)
+        if not permission:
+            return empty()
+        if permission == Permission.MASTER:
+            return empty()
+        return set_permission(at.fname, self.user, permission, self.set_pm)

@@ -1,25 +1,27 @@
 ﻿import asyncio
 import random
 from asyncio import sleep
-from typing import List, Dict, Set
+from typing import List, Dict, Set, Type, Optional
 
 from aiotieba import Client, PostSortType
 from aiotieba.typing import Threads, Thread, Posts, Post, Comments, Comment
 from sanic.log import logger
 
+from core.enum import Permission, ExecuteType
 from core.models import ForumPermission
 from core.types import TBApp
-from .checker import manager
-from .checker_manage import CheckMap, Executor
+from .checker import CHECKER_MAP, BaseChecker
+from .executor import Executor, OFFICES_ID
 from .models import Post as RPost
 from .models import Thread as RThread
 
 
 class Reviewer:
+    name = "review"
+    sender = "BOT"
 
     def __init__(self, app: TBApp = None):
         self.app = app
-        self.check_map: CheckMap = manager.check_map
         self.forums: List[ForumPermission] = []
         self.dev = True
         self.functions: Dict[str, Set[str]] = {}
@@ -39,22 +41,41 @@ class Reviewer:
         need_next_check: List[Thread] = []
 
         async def check_and_execute(ce_thread: Thread):
-            executor = Executor(obj=ce_thread)
+            executor: Optional[Executor] = None
 
-            async def get_execute(_check):
-                if _check['function'].__name__ not in self.functions.get(ce_thread.fname, ()):
+            async def get_execute(_check: Type[BaseChecker]):
+                nonlocal executor
+
+                if _check.name() not in self.functions.get(ce_thread.fname, ()):
                     return None
-                _executor = await _check['function'](ce_thread, client, self.app)
+
+                if _check.ignore_office and ce_thread.user.user_id in OFFICES_ID:
+                    return None
+
+                fp = await ForumPermission.get_or_none(user_id=ce_thread.author_id, forum=ce_thread.fname)
+                if _check.ignore_admin and fp and Permission(fp.permission) in Permission.GE_CREATOR:
+                    return None
+
+                _executor = await _check.thread(ce_thread, client, self.app)
                 if not _executor:
                     raise TypeError("Need to return Executor object")
-                executor.exec_compare(_executor)
+                if executor is None:
+                    executor = _executor
+                else:
+                    executor = Executor.exec_compare(executor, _executor)
 
-            await asyncio.gather(*[get_execute(check) for check in self.check_map['thread']])
+            await asyncio.gather(*[get_execute(Checker) for Checker in CHECKER_MAP.values()])
 
+            if executor is None:
+                return None
+
+            executor.set_base_info(self.name, self.sender)
             if not self.dev:
                 await executor.run(client)
-            else:
-                logger.debug(f"[review] [Thread] {executor}")
+            elif executor.type != ExecuteType.EMPTY:
+                logger.debug(f"[{self.name}] [thread] {executor}")
+
+            return executor
 
         async def check_last_time(clt_thread: Thread):
             if clt_thread.is_livepost:
@@ -67,8 +88,9 @@ class Reviewer:
                     need_next_check.append(clt_thread)
                     await RThread.filter(tid=clt_thread.tid).update(last_time=clt_thread.last_time)
             else:
-                need_next_check.append(clt_thread)
-                await check_and_execute(clt_thread)
+                executor = await check_and_execute(clt_thread)
+                if not executor or executor.type not in ExecuteType.delete():
+                    need_next_check.append(clt_thread)
                 await RThread.create(tid=clt_thread.tid, fid=await client.get_fid(fname),
                                      last_time=clt_thread.last_time)
 
@@ -128,22 +150,41 @@ class Reviewer:
         need_next_check: List[Post] = []
 
         async def check_and_execute(ce_post: Post):
-            executor = Executor(obj=ce_post)
+            executor: Optional[Executor] = None
 
-            async def get_execute(_check):
-                if _check['function'].__name__ not in self.functions.get(ce_post.fname, ()):
+            async def get_execute(_check: Type[BaseChecker]):
+                nonlocal executor
+
+                if _check.name() not in self.functions.get(ce_post.fname, ()):
                     return None
-                _executor = await _check['function'](ce_post, client, self.app)
+
+                if _check.ignore_office and ce_post.user.user_id in OFFICES_ID:
+                    return None
+
+                fp = await ForumPermission.get_or_none(user_id=ce_post.author_id, forum=ce_post.fname)
+                if _check.ignore_admin and fp and Permission(fp.permission) in Permission.GE_CREATOR:
+                    return None
+
+                _executor = await _check.post(ce_post, client, self.app)
                 if not _executor:
                     raise TypeError("Need to return Executor object")
-                executor.exec_compare(_executor)
+                if executor is None:
+                    executor = _executor
+                else:
+                    executor = Executor.exec_compare(executor, _executor)
 
-            await asyncio.gather(*[get_execute(check) for check in self.check_map['post']])
+            await asyncio.gather(*[get_execute(Checker) for Checker in CHECKER_MAP.values()])
 
+            if executor is None:
+                return None
+
+            executor.set_base_info(self.name, self.sender)
             if not self.dev:
                 await executor.run(client)
-            else:
-                logger.debug(f"[review] [Post] {executor}")
+            elif executor.type != ExecuteType.EMPTY:
+                logger.debug(f"[{self.name}] [post] {executor}")
+
+            return executor
 
         async def check_reply_num(crn_post: Post):
             prev_post = await RPost.filter(pid=crn_post.pid).get_or_none()
@@ -154,8 +195,9 @@ class Reviewer:
                     need_next_check.append(crn_post)
                     await RPost.filter(pid=crn_post.pid).update(reply_num=crn_post.reply_num)
             else:
-                need_next_check.append(crn_post)
-                await check_and_execute(crn_post)
+                executor = await check_and_execute(crn_post)
+                if not executor or executor not in ExecuteType.delete():
+                    need_next_check.append(crn_post)
                 await RPost.create(pid=crn_post.pid, tid=tid, reply_num=crn_post.reply_num)
 
         await asyncio.gather(*[check_reply_num(post) for post in posts])
@@ -187,22 +229,40 @@ class Reviewer:
             comments = post.comments
 
         async def check_and_execute(cae_comment: Comment):
-            executor = Executor(obj=cae_comment)
+            executor: Optional[Executor] = None
 
-            async def get_execute(_check):
-                if _check['function'].__name__ not in self.functions.get(cae_comment.fname, ()):
+            async def get_execute(_check: Type[BaseChecker]):
+                nonlocal executor
+
+                if _check.name() not in self.functions.get(cae_comment.fname, ()):
                     return None
-                _executor = await _check['function'](cae_comment, client, self.app)
+
+                if _check.ignore_office and cae_comment.user.user_id in OFFICES_ID:
+                    return None
+
+                fp = await ForumPermission.get_or_none(user_id=cae_comment.author_id, forum=cae_comment.fname)
+                if _check.ignore_admin and fp and Permission(fp.permission) in Permission.GE_CREATOR:
+                    return None
+
+                _executor = await _check.comment(cae_comment, client, self.app)
                 if not _executor:
                     raise TypeError("Need to return Executor object")
-                executor.exec_compare(_executor)
 
-            await asyncio.gather(*[get_execute(check) for check in self.check_map['comment']])
+                if executor is None:
+                    executor = _executor
+                else:
+                    executor = Executor.exec_compare(executor, _executor)
 
+            await asyncio.gather(*[get_execute(Checker) for Checker in CHECKER_MAP.values()])
+
+            if executor is None:
+                return None
+
+            executor.set_base_info(self.name, self.sender)
             if not self.dev:
                 await executor.run(client)
-            else:
-                logger.debug(f"[review] [Comment] {executor}")
+            elif executor.type != ExecuteType.EMPTY:
+                logger.debug(f"[{self.name}] [comment] {executor}")
 
         async def check_comment_of_db(ccod_comment: Comment):
             prev_comment = await RPost.filter(pid=ccod_comment.pid).get_or_none()
@@ -221,16 +281,17 @@ class Reviewer:
             max_time: 最大间隔时间（单位：秒）
         """
         while True:
-            logger.debug("Reviewer working ...")
+            logger.debug(f"[{self.name}] working ...")
             user = await fp.user.get()
             async with Client(user.BDUSS, user.STOKEN) as client:
-                logger.debug(f"[Reviewer] review {fp.forum}")
+                logger.debug(f"[{self.name}] review {fp.forum}")
                 await self.check_threads(client, fp.forum)
             if self.dev:
                 break
             await sleep(random.uniform(min_time, max_time))
 
     async def get_config(self):
+        self.app.ctx.config = self.app.ctx.config.load()
         with self.app.ctx.config as config:
             self.dev = config.extend.review.dev
 
@@ -247,8 +308,10 @@ class Reviewer:
             self.forums = forums
 
     async def start(self):
-        logger.info("Reviewer start")
-        if self.app is not None:
-            await self.get_config()
-        await asyncio.gather(*[self.run_with_client(fp) for fp in self.forums])
-        logger.info("Reviewer stopped")
+        logger.info(f"[{self.name}] start")
+        try:
+            if self.app is not None:
+                await self.get_config()
+            await asyncio.gather(*[self.run_with_client(fp) for fp in self.forums])
+        except asyncio.CancelledError:
+            logger.info(f"[{self.name}] stopped")
